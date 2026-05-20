@@ -66,38 +66,23 @@ defmodule SeathWeb.UploadLive do
         <h1 class="text-2xl font-bold mb-8">Upload Documents</h1>
 
         <%!-- Upload zone --%>
-        <div
+        <label
           id="upload-zone"
           phx-drop-target={@uploads.document.ref}
-          phx-hook=".UploadZone"
           class={[
-            "border-2 border-dashed border-gray-300 rounded-xl p-12 text-center",
-            "hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer",
+            "block border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer",
+            "hover:border-blue-400 hover:bg-blue-50 transition-colors",
             length(@uploads.document.entries) > 0 && "border-blue-400 bg-blue-50"
           ]}
         >
-          <.live_file_input upload={@uploads.document} id="file-input" class="hidden" />
-          <script :type={Phoenix.LiveView.ColocatedHook} name=".UploadZone">
-            export default {
-              mounted() {
-                this.el.addEventListener("click", () => {
-                  const input = document.getElementById("file-input");
-                  if (input) input.click();
-                });
-                this.el.addEventListener("dragover", (e) => {
-                  e.preventDefault();
-                  this.el.classList.add("border-blue-400", "bg-blue-50");
-                });
-                this.el.addEventListener("dragleave", () => {
-                  this.el.classList.remove("border-blue-400", "bg-blue-50");
-                });
-              }
-            }
-          </script>
+          <.live_file_input
+            upload={@uploads.document}
+            class="hidden"
+          />
           <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
           <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
           <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
-        </div>
+        </label>
 
         <%!-- Upload progress --%>
         <div :for={entry <- @uploads.document.entries} class="mt-4 p-4 bg-white rounded-lg border">

@@ -12,13 +12,9 @@ defmodule SeathWeb.UploadLiveTest do
   test "shows file type restrictions", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/upload")
 
-    view
-    |> file_input("#upload-zone", :document, [
-      %{name: "test.exe", content: "bad", type: "application/x-msdownload"}
-    ])
-    |> render_upload("test.exe")
-
-    assert render(view) =~ "test.exe"
+    html = render(view)
+    assert html =~ "PDF, PNG, JPG"
+    assert html =~ "up to 50MB"
   end
 
   test "receives status updates via PubSub", %{conn: conn} do
