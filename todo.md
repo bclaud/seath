@@ -2,12 +2,12 @@
 
 ## Foundation — Document Model & Ingestion
 
-- [ ] [high] create Document schema with state machine — every downstream feature depends on this
-- [ ] [high] add document upload with local filesystem storage — documents must enter the system first
-- [ ] [high] implement Oban OCR worker using provider behaviour — extracted text prerequisite for classification and search
-- [ ] add Azure Document Intelligence OCR provider — cloud option for high-accuracy OCR
-- [ ] add Ollama OCR provider — self-hosted fallback, no cloud dependency required
-- [ ] create Tag and DocumentType schemas with many-to-many documents — classification needs targets to propose
+- [x] [high] create Document schema with state machine — every downstream feature depends on this
+- [x] [high] add document upload with local filesystem storage — documents must enter the system first
+- [x] [high] implement Oban OCR worker using provider behaviour — extracted text prerequisite for classification and search
+- [x] add Azure Document Intelligence OCR provider — cloud option for high-accuracy OCR
+- [x] add Ollama OCR provider — self-hosted fallback, no cloud dependency required
+- [x] create Tag and DocumentType schemas with many-to-many documents — classification needs targets to propose
 
 ## Core Pipeline — Classification & Review
 
@@ -21,7 +21,7 @@
 
 ## Differentiators — Chat & RAG
 
-- [ ] build conversational document ingestion LiveView with drag-and-drop — friendly first impression, key UX differentiator
+- [x] build conversational document ingestion LiveView with drag-and-drop — friendly first impression, key UX differentiator
 - [ ] broadcast pipeline status updates to LiveView via PubSub — users see OCR/classification progress inline
 - [ ] generate document embeddings and store in pgvector — prerequisite for RAG and semantic search
 - [ ] build RAG chat LiveView with source citations and pgvector retrieval — genuine differentiator Paperless lacks
