@@ -116,6 +116,29 @@ defmodule Seath.Documents do
   end
 
   @doc """
+  Searches documents by full-text search over title, OCR text, and file name.
+
+  Uses PostgreSQL tsvector/tsquery for ranked full-text search.
+  Returns an empty list for empty or nil queries.
+  """
+  def search(query) when is_binary(query) and query != "" do
+    tsquery =
+      query
+      |> String.split()
+      |> Enum.map(&(&1 <> ":*"))
+      |> Enum.join(" & ")
+
+    from(d in Document,
+      where: fragment("search_vector @@ to_tsquery('english', ?)", ^tsquery),
+      order_by: fragment("ts_rank(search_vector, to_tsquery('english', ?)) DESC", ^tsquery),
+      preload: [:tags, :document_type]
+    )
+    |> Repo.all()
+  end
+
+  def search(_), do: []
+
+  @doc """
   Validates that a file size does not exceed the maximum allowed size.
 
   Returns `:ok` or `{:error, reason}`.

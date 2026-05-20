@@ -19,6 +19,7 @@ defmodule SeathWeb.Router do
 
     get "/", PageController, :home
     live "/upload", UploadLive, :index
+    live "/review", ReviewLive, :index
   end
 
   # Other scopes may use custom stacks.

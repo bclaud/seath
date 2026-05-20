@@ -22,6 +22,13 @@ defmodule Seath.DocumentTypes do
   def get_type!(id), do: Repo.get!(DocumentType, id)
 
   @doc """
+  Gets a single document type by name.
+
+  Returns `nil` if the document type does not exist.
+  """
+  def get_type_by_name(name), do: Repo.get_by(DocumentType, name: name)
+
+  @doc """
   Creates a document type.
   """
   def create_type(attrs \\ %{}) do

@@ -67,6 +67,9 @@ config :seath, Oban,
 # Configure OCR provider
 config :seath, :ocr_provider, Seath.OCR.Mock
 
+# Configure LLM provider
+config :seath, :llm_provider, Seath.LLM.Mock
+
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

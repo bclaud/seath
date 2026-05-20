@@ -12,7 +12,11 @@ defmodule Seath.OCR.Ollama do
   @impl true
   def extract(file_path) do
     config = Application.get_env(:seath, __MODULE__, [])
-    base_url = Keyword.get(config, :base_url) || System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    base_url =
+      Keyword.get(config, :base_url) ||
+        System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+
     model = Keyword.get(config, :model) || System.get_env("OLLAMA_OCR_MODEL", "llava")
 
     do_extract(file_path, base_url, model)
@@ -28,7 +32,8 @@ defmodule Seath.OCR.Ollama do
         messages: [
           %{
             role: "user",
-            content: "Extract all text from this document image. Return only the extracted text, nothing else.",
+            content:
+              "Extract all text from this document image. Return only the extracted text, nothing else.",
             images: [image_data]
           }
         ]

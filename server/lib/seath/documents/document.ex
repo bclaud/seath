@@ -49,7 +49,8 @@ defmodule Seath.Documents.Document do
       :file_size,
       :ocr_text,
       :status,
-      :archived_at
+      :archived_at,
+      :document_type_id
     ])
     |> validate_required([:file_path, :file_name, :file_type, :file_size])
     |> validate_number(:file_size, greater_than: 0)

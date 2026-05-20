@@ -71,7 +71,11 @@ defmodule SeathWeb.UploadLive do
             <span class="text-sm text-gray-500">{entry.progress}%</span>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
-            <div class="bg-blue-500 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}></div>
+            <div
+              class="bg-blue-500 h-2 rounded-full transition-all"
+              style={"width: #{entry.progress}%"}
+            >
+            </div>
           </div>
           <p :if={entry.valid? == false} class="text-sm text-red-500 mt-2">
             {upload_errors(@uploads.document, entry) |> Enum.map(&to_string/1) |> Enum.join(", ")}
@@ -92,11 +96,16 @@ defmodule SeathWeb.UploadLive do
         <div :if={@uploaded_docs != []} class="mt-8">
           <h2 class="text-lg font-semibold mb-4">Uploaded Documents</h2>
           <div class="space-y-2">
-            <div :for={{_id, doc} <- @uploaded_docs} class="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div
+              :for={{_id, doc} <- @uploaded_docs}
+              class="p-3 bg-green-50 border border-green-200 rounded-lg"
+            >
               <div class="flex items-center gap-2">
                 <.icon name="hero-document-check" class="w-5 h-5 text-green-600" />
                 <span class="text-sm font-medium text-green-800">{doc.file_name}</span>
-                <span class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">{doc.status}</span>
+                <span class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                  {doc.status}
+                </span>
               </div>
             </div>
           </div>

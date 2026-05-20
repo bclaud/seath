@@ -23,6 +23,13 @@ defmodule Seath.Tags do
   def get_tag!(id), do: Repo.get!(Tag, id)
 
   @doc """
+  Gets a single tag by name.
+
+  Returns `nil` if the tag does not exist.
+  """
+  def get_tag_by_name(name), do: Repo.get_by(Tag, name: name)
+
+  @doc """
   Creates a tag.
   """
   def create_tag(attrs \\ %{}) do

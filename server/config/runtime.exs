@@ -125,3 +125,7 @@ config :seath, Seath.OCR.Azure,
 config :seath, Seath.OCR.Ollama,
   base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
   model: System.get_env("OLLAMA_OCR_MODEL", "llava")
+
+config :seath, Seath.LLM.Ollama,
+  base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
+  model: System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
