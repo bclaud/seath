@@ -13,13 +13,16 @@
 
         elixir = pkgs.beam.packages.erlang_27.elixir_1_18;
 
+        postgresWithPgvector = pkgs.postgresql_16.withPackages (ps: [ ps.pgvector ]);
+        myPostgres = postgresWithPgvector;
+
         appInputs = with pkgs; [
           elixir
           erlang_27
           nodejs_22
-          postgresql_16
           inotify-tools
           just
+          postgresWithPgvector
         ];
 
         devInputs = with pkgs; [
@@ -43,8 +46,9 @@
                 export ERL_AFLAGS="-kernel shell_history enabled"
 
                 if [ ! -d /tmp/seath-postgres ]; then
-                  ${pkgs.postgresql_16}/bin/initdb -D /tmp/seath-postgres --locale=en_US.UTF-8
+                  ${myPostgres}/bin/initdb -D /tmp/seath-postgres --locale=en_US.UTF-8
                   echo "unix_socket_directories = '/tmp'" >> /tmp/seath-postgres/postgresql.conf
+                  echo "shared_preload_libraries = 'vector'" >> /tmp/seath-postgres/postgresql.conf
                 fi
                 export PGDATA=/tmp/seath-postgres
                 export PGHOST=localhost
@@ -58,7 +62,7 @@
               echo "  elixir:  ${elixir.version}"
               echo "  erlang:  ${pkgs.erlang_27.version}"
               echo "  node:    ${pkgs.nodejs_22.version}"
-              echo "  postgres: ${pkgs.postgresql_16.version}"
+              echo "  postgres: ${myPostgres.version} (with pgvector)"
 
               ${erlangHook}
 

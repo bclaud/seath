@@ -145,7 +145,10 @@ defmodule SeathWeb.ReviewLive do
         </p>
 
         <%!-- Bulk action bar --%>
-        <div :if={MapSet.size(@selected_ids) > 0} class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+        <div
+          :if={MapSet.size(@selected_ids) > 0}
+          class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between"
+        >
           <span class="text-sm text-blue-800">
             {MapSet.size(@selected_ids)} document(s) selected
           </span>
@@ -226,7 +229,9 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- Confidence --%>
               <div :if={@selected_doc.confidence} class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Classification Confidence</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Classification Confidence
+                </label>
                 <div class="flex items-center gap-3">
                   <div class="flex-1 bg-gray-200 rounded-full h-3">
                     <div
@@ -287,7 +292,9 @@ defmodule SeathWeb.ReviewLive do
                 <label class="block text-sm font-medium text-gray-700 mb-1">Extracted Text</label>
                 <div class="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
                   <p class="text-sm text-gray-600 whitespace-pre-wrap">
-                    {if @selected_doc.ocr_text, do: String.slice(@selected_doc.ocr_text, 0, 1000), else: "No text extracted"}
+                    {if @selected_doc.ocr_text,
+                      do: String.slice(@selected_doc.ocr_text, 0, 1000),
+                      else: "No text extracted"}
                   </p>
                 </div>
               </div>
@@ -300,8 +307,7 @@ defmodule SeathWeb.ReviewLive do
                   phx-value-id={@selected_doc.id}
                   class="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors"
                 >
-                  <.icon name="hero-check" class="w-5 h-5 inline mr-1" />
-                  Approve &amp; Archive
+                  <.icon name="hero-check" class="w-5 h-5 inline mr-1" /> Approve &amp; Archive
                 </button>
                 <button
                   id="reject-btn"
@@ -309,8 +315,7 @@ defmodule SeathWeb.ReviewLive do
                   phx-value-id={@selected_doc.id}
                   class="flex-1 bg-red-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-red-700 transition-colors"
                 >
-                  <.icon name="hero-x-mark" class="w-5 h-5 inline mr-1" />
-                  Reject
+                  <.icon name="hero-x-mark" class="w-5 h-5 inline mr-1" /> Reject
                 </button>
               </div>
             </div>

@@ -13,7 +13,14 @@ defmodule Seath.Workers.ArchiveWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"document_id" => id}}) do
     with {:ok, doc} <- fetch_document(id),
-         {:ok, _archived} <- Documents.transition_status(doc, "archived") do
+         {:ok, archived_doc} <- Documents.transition_status(doc, "archived") do
+      Phoenix.PubSub.broadcast(
+        Seath.PubSub,
+        "documents",
+        {:document_updated, %{id: archived_doc.id, status: "archived"}}
+      )
+
+      Seath.Workers.EmbedWorker.new(%{"document_id" => archived_doc.id}) |> Oban.insert()
       :ok
     end
   end

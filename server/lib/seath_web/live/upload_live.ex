@@ -3,6 +3,10 @@ defmodule SeathWeb.UploadLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Seath.PubSub, "documents")
+    end
+
     {:ok,
      socket
      |> allow_upload(:document,
@@ -39,6 +43,20 @@ defmodule SeathWeb.UploadLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:document_updated, updated}, socket) do
+    updated_docs =
+      Enum.map(socket.assigns.uploaded_docs, fn
+        {:ok, doc} when doc.id == updated.id ->
+          {:ok, Map.put(doc, :status, to_string(updated.status))}
+
+        other ->
+          other
+      end)
+
+    {:noreply, assign(socket, :uploaded_docs, updated_docs)}
   end
 
   @impl true
@@ -103,7 +121,17 @@ defmodule SeathWeb.UploadLive do
               <div class="flex items-center gap-2">
                 <.icon name="hero-document-check" class="w-5 h-5 text-green-600" />
                 <span class="text-sm font-medium text-green-800">{doc.file_name}</span>
-                <span class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                <span class={[
+                  "text-xs px-2 py-0.5 rounded-full font-medium",
+                  case doc.status do
+                    "pending" -> "bg-yellow-100 text-yellow-800"
+                    "processing" -> "bg-blue-100 text-blue-800"
+                    "awaiting_review" -> "bg-purple-100 text-purple-800"
+                    "archived" -> "bg-green-100 text-green-800"
+                    "rejected" -> "bg-red-100 text-red-800"
+                    _ -> "bg-gray-100 text-gray-800"
+                  end
+                ]}>
                   {doc.status}
                 </span>
               </div>

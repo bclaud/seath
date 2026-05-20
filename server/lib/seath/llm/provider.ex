@@ -18,4 +18,6 @@ defmodule Seath.LLM.Provider do
               available_types :: [String.t()]
             ) ::
               {:ok, classification_result()} | {:error, term()}
+
+  @callback embed(text :: String.t()) :: {:ok, [float()]} | {:error, term()}
 end

@@ -62,6 +62,36 @@ defmodule Seath.LLM.Ollama do
     end
   end
 
+  @impl true
+  def embed(text) do
+    config = Application.get_env(:seath, __MODULE__, [])
+
+    base_url =
+      Keyword.get(config, :base_url) ||
+        System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    model = Keyword.get(config, :model) || System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+
+    body = %{
+      model: model,
+      input: text
+    }
+
+    case Req.post("#{base_url}/api/embed", json: body) do
+      {:ok, %{status: 200, body: %{"embeddings" => [embedding | _]}}} ->
+        {:ok, embedding}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:unexpected_response, status, body}}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, :connection_refused}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
   defp parse_response(content) do
     case Jason.decode(content) do
       {:ok, %{"title" => title} = result} ->

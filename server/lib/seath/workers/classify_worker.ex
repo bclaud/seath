@@ -18,7 +18,13 @@ defmodule Seath.Workers.ClassifyWorker do
          tags <- Tags.list_tags() |> Enum.map(& &1.name),
          types <- DocumentTypes.list_types() |> Enum.map(& &1.name),
          {:ok, result} <- Seath.LLM.classify(doc.ocr_text, tags, types),
-         {:ok, _doc} <- apply_classification(doc, result) do
+         {:ok, doc} <- apply_classification(doc, result) do
+      Phoenix.PubSub.broadcast(
+        Seath.PubSub,
+        "documents",
+        {:document_updated, %{id: doc.id, status: "awaiting_review"}}
+      )
+
       :ok
     end
   end
@@ -40,7 +46,8 @@ defmodule Seath.Workers.ClassifyWorker do
 
   defp apply_classification(doc, result) do
     # Update title and confidence
-    {:ok, doc} = Documents.update_document(doc, %{title: result.title, confidence: result.confidence})
+    {:ok, doc} =
+      Documents.update_document(doc, %{title: result.title, confidence: result.confidence})
 
     # Add proposed tags
     Enum.each(result.tags, fn tag_name ->

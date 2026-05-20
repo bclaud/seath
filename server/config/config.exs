@@ -12,6 +12,7 @@ config :seath,
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
 config :seath, :storage, upload_dir: "priv/uploads"
+
 # Configure the endpoint
 config :seath, SeathWeb.Endpoint,
   url: [host: "localhost"],
@@ -61,8 +62,14 @@ config :logger, :default_formatter,
 # Configure Oban
 config :seath, Oban,
   repo: Seath.Repo,
-  plugins: [Oban.Plugins.Pruner],
-  queues: [ingest: 5, ocr: 3, classify: 3, archive: 2]
+  plugins: [
+    Oban.Plugins.Pruner,
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 3 * * *", Seath.Workers.ApplyArchiveRules, queue: :archive_cron}
+     ]}
+  ],
+  queues: [ingest: 5, ocr: 3, classify: 3, archive: 2, archive_cron: 1]
 
 # Configure OCR provider
 config :seath, :ocr_provider, Seath.OCR.Mock

@@ -14,4 +14,9 @@ defmodule Seath.TestLLMProvider do
        confidence: 0.9
      }}
   end
+
+  @impl true
+  def embed(_text) do
+    {:ok, Enum.map(1..1536, fn _ -> :rand.uniform() - 0.5 end)}
+  end
 end

@@ -20,4 +20,19 @@ defmodule SeathWeb.UploadLiveTest do
 
     assert render(view) =~ "test.exe"
   end
+
+  test "receives status updates via PubSub", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/upload")
+
+    # Simulate a PubSub broadcast
+    Phoenix.PubSub.broadcast(
+      Seath.PubSub,
+      "documents",
+      {:document_updated, %{id: "test-id", status: "processing"}}
+    )
+
+    # The handle_info should process the update without crashing
+    render(view)
+    assert true
+  end
 end

@@ -18,4 +18,11 @@ defmodule Seath.LLM do
   def classify(text, available_tags, available_types) do
     impl().classify(text, available_tags, available_types)
   end
+
+  @doc """
+  Generates an embedding vector for the given text using the configured LLM provider.
+  """
+  def embed(text) do
+    impl().embed(text)
+  end
 end

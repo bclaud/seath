@@ -13,6 +13,12 @@ defmodule Seath.Workers.OCRWorker do
     with {:ok, document} <- fetch_document(id),
          {:ok, text} <- Seath.OCR.extract(document.file_path),
          {:ok, _updated} <- Documents.store_ocr_text(document, text) do
+      Phoenix.PubSub.broadcast(
+        Seath.PubSub,
+        "documents",
+        {:document_updated, %{id: document.id, status: "processing"}}
+      )
+
       Seath.Workers.ClassifyWorker.new(%{"document_id" => document.id}) |> Oban.insert()
       :ok
     end
