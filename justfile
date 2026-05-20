@@ -26,7 +26,7 @@ server-db-reset:
     mix ecto.reset
 
 server-db-start:
-    @pg_isready -q || pg_ctl -D /tmp/seath-postgres -l /tmp/seath-postgres.log start
+    @pg_isready -p 5433 -q || pg_ctl -D /tmp/seath-postgres -o "-p 5433" -l /tmp/seath-postgres.log start
 
 server-db-stop:
     pg_ctl -D /tmp/seath-postgres stop 2>/dev/null || true

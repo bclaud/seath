@@ -44,12 +44,13 @@
 
                 if [ ! -d /tmp/seath-postgres ]; then
                   ${pkgs.postgresql_16}/bin/initdb -D /tmp/seath-postgres --locale=en_US.UTF-8
+                  echo "unix_socket_directories = '/tmp'" >> /tmp/seath-postgres/postgresql.conf
                 fi
                 export PGDATA=/tmp/seath-postgres
                 export PGHOST=localhost
                 export PGDATABASE=seath_dev
-                export PGPORT=5432
-                export DATABASE_URL="postgresql://localhost:5432/seath_dev"
+                export PGPORT=5433
+                export DATABASE_URL="postgresql://localhost:5433/seath_dev"
               '';
             in
             ''
