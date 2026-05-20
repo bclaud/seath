@@ -12,7 +12,8 @@ defmodule SeathWeb.ReviewLive do
      |> assign(:documents, documents)
      |> assign(:tags, tags)
      |> assign(:types, types)
-     |> assign(:selected_doc, nil)}
+     |> assign(:selected_doc, nil)
+     |> assign(:selected_ids, MapSet.new())}
   end
 
   @impl true
@@ -74,6 +75,54 @@ defmodule SeathWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("toggle_select", %{"id" => id}, socket) do
+    selected_ids =
+      if MapSet.member?(socket.assigns.selected_ids, id) do
+        MapSet.delete(socket.assigns.selected_ids, id)
+      else
+        MapSet.put(socket.assigns.selected_ids, id)
+      end
+
+    {:noreply, assign(socket, :selected_ids, selected_ids)}
+  end
+
+  @impl true
+  def handle_event("bulk_approve", _params, socket) do
+    Enum.each(socket.assigns.selected_ids, fn id ->
+      doc = Seath.Documents.get_document!(id)
+      Seath.Documents.transition_status(doc, "archived")
+    end)
+
+    count = MapSet.size(socket.assigns.selected_ids)
+    documents = Seath.Documents.list_by_status("awaiting_review")
+
+    {:noreply,
+     socket
+     |> assign(:documents, documents)
+     |> assign(:selected_ids, MapSet.new())
+     |> assign(:selected_doc, nil)
+     |> put_flash(:info, "#{count} document(s) approved and archived.")}
+  end
+
+  @impl true
+  def handle_event("bulk_reject", _params, socket) do
+    Enum.each(socket.assigns.selected_ids, fn id ->
+      doc = Seath.Documents.get_document!(id)
+      Seath.Documents.transition_status(doc, "rejected")
+    end)
+
+    count = MapSet.size(socket.assigns.selected_ids)
+    documents = Seath.Documents.list_by_status("awaiting_review")
+
+    {:noreply,
+     socket
+     |> assign(:documents, documents)
+     |> assign(:selected_ids, MapSet.new())
+     |> assign(:selected_doc, nil)
+     |> put_flash(:info, "#{count} document(s) rejected.")}
+  end
+
+  @impl true
   def handle_event("remove_tag", %{"id" => id, "tag_id" => tag_id}, socket) do
     doc = Seath.Documents.get_document!(id)
     tag = Seath.Tags.get_tag!(tag_id)
@@ -95,26 +144,54 @@ defmodule SeathWeb.ReviewLive do
           {length(@documents)} document(s) awaiting review
         </p>
 
+        <%!-- Bulk action bar --%>
+        <div :if={MapSet.size(@selected_ids) > 0} class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <span class="text-sm text-blue-800">
+            {MapSet.size(@selected_ids)} document(s) selected
+          </span>
+          <div class="flex gap-2">
+            <button
+              phx-click="bulk_approve"
+              class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+            >
+              Approve Selected
+            </button>
+            <button
+              phx-click="bulk_reject"
+              class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+            >
+              Reject Selected
+            </button>
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <%!-- Document list --%>
           <div class="lg:col-span-1 space-y-2">
             <div
               :for={doc <- @documents}
               id={"doc-list-item-#{doc.id}"}
-              phx-click="select"
-              phx-value-id={doc.id}
               class={[
-                "p-4 rounded-lg border cursor-pointer transition-colors",
+                "flex items-center gap-2 p-4 rounded-lg border bg-white transition-colors",
                 if(@selected_doc && @selected_doc.id == doc.id,
                   do: "border-blue-500 bg-blue-50",
-                  else: "border-gray-200 hover:border-gray-300 bg-white"
+                  else: "border-gray-200 hover:border-gray-300"
                 )
               ]}
             >
-              <h3 class="font-medium text-gray-900 truncate">{doc.title || doc.file_name}</h3>
-              <p class="text-sm text-gray-500 mt-1">
-                {doc.file_type} · {format_file_size(doc.file_size)}
-              </p>
+              <input
+                type="checkbox"
+                phx-click="toggle_select"
+                phx-value-id={doc.id}
+                checked={MapSet.member?(@selected_ids, doc.id)}
+                class="rounded border-gray-300 shrink-0"
+              />
+              <div phx-click="select" phx-value-id={doc.id} class="flex-1 cursor-pointer">
+                <h3 class="font-medium text-gray-900 truncate">{doc.title || doc.file_name}</h3>
+                <p class="text-sm text-gray-500 mt-1">
+                  {doc.file_type} · {format_file_size(doc.file_size)}
+                </p>
+              </div>
             </div>
 
             <div :if={@documents == []} class="text-center py-12 text-gray-400">
@@ -145,6 +222,37 @@ defmodule SeathWeb.ReviewLive do
                 <p class="text-gray-900">
                   {if @selected_doc.document_type, do: @selected_doc.document_type.name, else: "None"}
                 </p>
+              </div>
+
+              <%!-- Confidence --%>
+              <div :if={@selected_doc.confidence} class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Classification Confidence</label>
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 bg-gray-200 rounded-full h-3">
+                    <div
+                      class={[
+                        "h-3 rounded-full transition-all",
+                        cond do
+                          @selected_doc.confidence >= 0.8 -> "bg-green-500"
+                          @selected_doc.confidence >= 0.5 -> "bg-yellow-500"
+                          true -> "bg-red-500"
+                        end
+                      ]}
+                      style={"width: #{Float.round(@selected_doc.confidence * 100)}%"}
+                    >
+                    </div>
+                  </div>
+                  <span class={[
+                    "text-sm font-medium",
+                    cond do
+                      @selected_doc.confidence >= 0.8 -> "text-green-700"
+                      @selected_doc.confidence >= 0.5 -> "text-yellow-700"
+                      true -> "text-red-700"
+                    end
+                  ]}>
+                    {Float.round(@selected_doc.confidence * 100, 1)}%
+                  </span>
+                </div>
               </div>
 
               <%!-- Tags --%>

@@ -39,8 +39,8 @@ defmodule Seath.Workers.ClassifyWorker do
   end
 
   defp apply_classification(doc, result) do
-    # Update title
-    {:ok, doc} = Documents.update_document(doc, %{title: result.title})
+    # Update title and confidence
+    {:ok, doc} = Documents.update_document(doc, %{title: result.title, confidence: result.confidence})
 
     # Add proposed tags
     Enum.each(result.tags, fn tag_name ->

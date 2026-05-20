@@ -42,7 +42,7 @@ defmodule SeathWeb.ReviewLiveTest do
 
     # Select the document
     view
-    |> element("#doc-list-item-#{doc.id}")
+    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
     |> render_click()
 
     html = render(view)
@@ -66,7 +66,7 @@ defmodule SeathWeb.ReviewLiveTest do
 
     # Select the document
     view
-    |> element("#doc-list-item-#{doc.id}")
+    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
     |> render_click()
 
     assert render(view) =~ "Approve &amp; Archive"
@@ -95,7 +95,7 @@ defmodule SeathWeb.ReviewLiveTest do
     {:ok, view, _html} = live(conn, ~p"/review")
 
     view
-    |> element("#doc-list-item-#{doc.id}")
+    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
     |> render_click()
 
     view
@@ -120,7 +120,7 @@ defmodule SeathWeb.ReviewLiveTest do
     {:ok, view, _html} = live(conn, ~p"/review")
 
     view
-    |> element("#doc-list-item-#{doc.id}")
+    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
     |> render_click()
 
     view

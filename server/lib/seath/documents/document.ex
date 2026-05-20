@@ -27,6 +27,7 @@ defmodule Seath.Documents.Document do
     field :file_type, :string
     field :file_size, :integer
     field :ocr_text, :string
+    field :confidence, :float
     field :status, :string, default: "pending"
     field :archived_at, :utc_datetime
 
@@ -48,6 +49,7 @@ defmodule Seath.Documents.Document do
       :file_type,
       :file_size,
       :ocr_text,
+      :confidence,
       :status,
       :archived_at,
       :document_type_id
