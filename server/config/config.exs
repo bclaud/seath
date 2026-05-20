@@ -11,6 +11,7 @@ config :seath,
   ecto_repos: [Seath.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+config :seath, :storage, upload_dir: "priv/uploads"
 # Configure the endpoint
 config :seath, SeathWeb.Endpoint,
   url: [host: "localhost"],
@@ -56,6 +57,15 @@ config :tailwind,
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
+
+# Configure Oban
+config :seath, Oban,
+  repo: Seath.Repo,
+  plugins: [Oban.Plugins.Pruner],
+  queues: [ingest: 5, ocr: 3, classify: 3, archive: 2]
+
+# Configure OCR provider
+config :seath, :ocr_provider, Seath.OCR.Mock
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

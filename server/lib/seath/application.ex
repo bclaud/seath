@@ -12,6 +12,7 @@ defmodule Seath.Application do
       Seath.Repo,
       {DNSCluster, query: Application.get_env(:seath, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Seath.PubSub},
+      {Oban, Application.fetch_env!(:seath, Oban)},
       # Start a worker by calling: Seath.Worker.start_link(arg)
       # {Seath.Worker, arg},
       # Start to serve requests, typically the last entry
