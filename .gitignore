@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Build artifacts
+_build/
+deps/
+node_modules/
+assets/node_modules/
+
+# Erlang/OTP
+erl_crash.dump
+*.ez
+
+# Nix
+result
+.direnv/
+
+# Database
+/tmp/seath-postgres/
+/tmp/seath-postgres.log
+
+# IDE
+.vscode/
+.idea/
