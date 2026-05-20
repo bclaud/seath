@@ -32,6 +32,7 @@ defmodule Seath.Documents.Document do
     field :archived_at, :utc_datetime
 
     belongs_to :document_type, Seath.DocumentTypes.DocumentType
+    belongs_to :correspondent, Seath.Correspondents.Correspondent
     many_to_many :tags, Seath.Tags.Tag, join_through: "document_tags", on_replace: :delete
 
     timestamps(type: :utc_datetime)
@@ -52,7 +53,8 @@ defmodule Seath.Documents.Document do
       :confidence,
       :status,
       :archived_at,
-      :document_type_id
+      :document_type_id,
+      :correspondent_id
     ])
     |> validate_required([:file_path, :file_name, :file_type, :file_size])
     |> validate_number(:file_size, greater_than: 0)

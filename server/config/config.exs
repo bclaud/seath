@@ -66,10 +66,17 @@ config :seath, Oban,
     Oban.Plugins.Pruner,
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 3 * * *", Seath.Workers.ApplyArchiveRules, queue: :archive_cron}
+       {"0 3 * * *", Seath.Workers.ApplyArchiveRules, queue: :archive_cron},
+       {"*/5 * * * *", Seath.Workers.WatchedFolderWorker, queue: :ingest}
      ]}
   ],
   queues: [ingest: 5, ocr: 3, classify: 3, archive: 2, archive_cron: 1]
+
+# Configure watched folder auto-import
+config :seath, :watched_folder,
+  path: "priv/watched",
+  processed_subdir: "processed",
+  allowed_extensions: ~w(.pdf .png .jpg .jpeg .tiff .txt)
 
 # Configure OCR provider
 config :seath, :ocr_provider, Seath.OCR.Mock

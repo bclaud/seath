@@ -22,8 +22,8 @@
 ## Differentiators — Chat & RAG
 
 - [x] build conversational document ingestion LiveView with drag-and-drop — friendly first impression, key UX differentiator
-- [ ] broadcast pipeline status updates to LiveView via PubSub — users see OCR/classification progress inline
-- [ ] generate document embeddings and store in pgvector — prerequisite for RAG and semantic search
+- [x] broadcast pipeline status updates to LiveView via PubSub — users see OCR/classification progress inline
+- [x] generate document embeddings and store in pgvector — prerequisite for RAG and semantic search
 - [ ] build RAG chat LiveView with source citations and pgvector retrieval — genuine differentiator Paperless lacks
 - [ ] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
 
