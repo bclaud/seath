@@ -14,8 +14,8 @@
 - [x] [high] implement Oban classification worker using LLM provider behaviour — core differentiator over Paperless
 - [x] add Ollama LLM provider for classification — self-hosted classification, zero external API cost
 - [x] [high] build document review LiveView with approve/reject/edit — trust gate before documents reach archive
-- [ ] display classification confidence score in review UI — helps users triage what needs attention
-- [ ] add bulk approve/reject in document review — prevents review from becoming tedious at scale
+- [x] display classification confidence score in review UI — helps users triage what needs attention
+- [x] add bulk approve/reject in document review — prevents review from becoming tedious at scale
 - [x] add Oban archive worker with state transition — documents need a final resting place
 - [x] add PostgreSQL full-text search over OCR text and metadata — users must find documents they archived
 
