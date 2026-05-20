@@ -24,18 +24,18 @@
 - [x] build conversational document ingestion LiveView with drag-and-drop — friendly first impression, key UX differentiator
 - [x] broadcast pipeline status updates to LiveView via PubSub — users see OCR/classification progress inline
 - [x] generate document embeddings and store in pgvector — prerequisite for RAG and semantic search
-- [ ] build RAG chat LiveView with source citations and pgvector retrieval — genuine differentiator Paperless lacks
+- [x] build RAG chat LiveView with source citations and pgvector retrieval — genuine differentiator Paperless lacks
 - [ ] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
 
 ## Archive Hygiene — Rules & Automation
 
-- [ ] create tag-based archival rules with age threshold — hands-off "arquivo morto" document hygiene
-- [ ] add archival rule dry-run showing affected document count — prevents accidental mass-archival
-- [ ] add periodic Oban cron job to evaluate and apply archival rules — automation must run without manual trigger
+- [x] create tag-based archival rules with age threshold — hands-off "arquivo morto" document hygiene
+- [x] add archival rule dry-run showing affected document count — prevents accidental mass-archival
+- [x] add periodic Oban cron job to evaluate and apply archival rules — automation must run without manual trigger
 
 ## Paperless-Inspired Features
 
-- [ ] add watched folder with filesystem polling for auto-import — proven Paperless pattern, reduces ingestion friction
-- [ ] add saved searches with tag, type, and date range filters — power users need repeatable document queries
-- [ ] create Correspondent schema linked to documents — matches Paperless metadata users already expect
+- [x] add watched folder with filesystem polling for auto-import — proven Paperless pattern, reduces ingestion friction
+- [x] add saved searches with tag, type, and date range filters — power users need repeatable document queries
+- [x] create Correspondent schema linked to documents — matches Paperless metadata users already expect
 - [ ] add bulk tag add/remove on search result selection — efficiency for users managing large archives
