@@ -117,3 +117,11 @@ if config_env() == :prod do
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end
+
+config :seath, Seath.OCR.Azure,
+  endpoint: System.get_env("AZURE_DI_ENDPOINT"),
+  key: System.get_env("AZURE_DI_KEY")
+
+config :seath, Seath.OCR.Ollama,
+  base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
+  model: System.get_env("OLLAMA_OCR_MODEL", "llava")
