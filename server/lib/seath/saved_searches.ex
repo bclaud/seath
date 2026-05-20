@@ -1,5 +1,4 @@
 defmodule Seath.SavedSearches do
-  import Ecto.Query
   alias Seath.Repo
 
   def list_saved_searches do

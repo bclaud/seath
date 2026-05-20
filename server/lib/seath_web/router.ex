@@ -17,7 +17,7 @@ defmodule SeathWeb.Router do
   scope "/", SeathWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", DashboardLive, :index
     live "/upload", UploadLive, :index
     live "/review", ReviewLive, :index
     live "/chat", ChatLive, :index

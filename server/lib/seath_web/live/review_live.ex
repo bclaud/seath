@@ -137,7 +137,7 @@ defmodule SeathWeb.ReviewLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_page={:review} review_count={length(@documents)}>
       <div class="max-w-6xl mx-auto py-8 px-4">
         <h1 class="text-2xl font-bold mb-2">Document Review</h1>
         <p class="text-gray-500 mb-8">

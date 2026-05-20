@@ -72,7 +72,7 @@ defmodule SeathWeb.ChatLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_page={:chat}>
       <div class="max-w-4xl mx-auto py-8 px-4 h-[calc(100vh-4rem)] flex flex-col">
         <h1 class="text-2xl font-bold mb-2">Document Chat</h1>
         <p class="text-gray-500 mb-6">Ask questions about your archived documents</p>

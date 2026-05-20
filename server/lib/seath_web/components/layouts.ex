@@ -31,42 +31,51 @@ defmodule SeathWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :current_page, :atom, default: :dashboard
+  attr :review_count, :integer, default: 0
+
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-    </header>
+    <div class="flex h-screen bg-gray-50">
+      <%!-- Sidebar --%>
+      <aside class="w-64 bg-gray-900 text-white flex flex-col shrink-0">
+        <div class="p-6 border-b border-gray-700">
+          <h1 class="text-xl font-bold tracking-tight">Seath</h1>
+          <p class="text-sm text-gray-400 mt-1">Document Manager</p>
+        </div>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+        <nav class="flex-1 p-4 space-y-1">
+          <.nav_item navigate="/" icon="hero-home" active={@current_page == :dashboard}>
+            Dashboard
+          </.nav_item>
+          <.nav_item navigate="/upload" icon="hero-arrow-up-tray" active={@current_page == :upload}>
+            Upload
+          </.nav_item>
+          <.nav_item navigate="/review" icon="hero-check-badge" active={@current_page == :review}>
+            Review
+            <span :if={@review_count > 0} class="ml-auto bg-yellow-500 text-white text-xs px-2 py-0.5 rounded-full">
+              {@review_count}
+            </span>
+          </.nav_item>
+          <.nav_item navigate="/chat" icon="hero-chat-bubble-left-right" active={@current_page == :chat}>
+            Chat
+          </.nav_item>
+        </nav>
+
+        <div class="p-4 border-t border-gray-700">
+          <.nav_item navigate="/dev/dashboard" icon="hero-cog-6-tooth" active={false}>
+            Admin
+          </.nav_item>
+        </div>
+      </aside>
+
+      <%!-- Main content --%>
+      <main class="flex-1 overflow-y-auto">
         {render_slot(@inner_block)}
-      </div>
-    </main>
+      </main>
+    </div>
 
     <.flash_group flash={@flash} />
     """
@@ -149,6 +158,26 @@ defmodule SeathWeb.Layouts do
         <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
       </button>
     </div>
+    """
+  end
+
+  attr :navigate, :string, required: true
+  attr :icon, :string, required: true
+  attr :active, :boolean, default: false
+  slot :inner_block, required: true
+
+  def nav_item(assigns) do
+    ~H"""
+    <a
+      href={@navigate}
+      class={[
+        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+        if(@active, do: "bg-gray-700 text-white", else: "text-gray-300 hover:bg-gray-800 hover:text-white")
+      ]}
+    >
+      <.icon name={@icon} class="w-5 h-5 shrink-0" />
+      <span class="flex-1">{render_slot(@inner_block)}</span>
+    </a>
     """
   end
 end
