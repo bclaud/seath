@@ -7,6 +7,9 @@ defmodule SeathWeb.UploadLive do
       Phoenix.PubSub.subscribe(Seath.PubSub, "documents")
     end
 
+    pending = Seath.Documents.list_by_status("pending")
+    processing = Seath.Documents.list_by_status("processing")
+
     {:ok,
      socket
      |> allow_upload(:document,
@@ -14,7 +17,7 @@ defmodule SeathWeb.UploadLive do
        max_entries: 10,
        max_file_size: 50_000_000
      )
-     |> assign(:uploaded_docs, [])}
+     |> assign(:in_flight, pending ++ processing)}
   end
 
   @impl true
@@ -26,21 +29,26 @@ defmodule SeathWeb.UploadLive do
   def handle_event("save", _params, socket) do
     File.mkdir_p!(Seath.Storage.upload_dir())
 
-    results =
+    docs =
       consume_uploaded_entries(socket, :document, fn %{path: path}, entry ->
         case Seath.Documents.ingest(path, entry.client_name) do
-          {:ok, doc} -> {:ok, doc}
-          {:error, reason} -> {:ok, %{error: reason, name: entry.client_name}}
+          {:ok, doc} ->
+            # Kick off the pipeline immediately
+            Seath.Workers.OCRWorker.new(%{"document_id" => doc.id}) |> Oban.insert()
+            {:ok, doc}
+
+          {:error, reason} ->
+            {:ok, %{error: reason, name: entry.client_name}}
         end
       end)
 
-    docs = Enum.filter(results, &is_struct(&1, Seath.Documents.Document))
-    errors = Enum.reject(results, &is_struct(&1, Seath.Documents.Document))
+    successes = Enum.filter(docs, &is_struct(&1, Seath.Documents.Document))
+    errors = Enum.reject(docs, &is_struct(&1, Seath.Documents.Document))
 
     {:noreply,
      socket
-     |> assign(:uploaded_docs, docs ++ socket.assigns.uploaded_docs)
-     |> put_flash(:info, "#{length(docs)} document(s) uploaded successfully")
+     |> assign(:in_flight, successes ++ socket.assigns.in_flight)
+     |> put_flash(:info, "#{length(successes)} document(s) uploaded — pipeline started")
      |> then(fn s ->
        if errors != [], do: put_flash(s, :error, "#{length(errors)} document(s) failed"),
        else: s
@@ -49,26 +57,27 @@ defmodule SeathWeb.UploadLive do
 
   @impl true
   def handle_info({:document_updated, updated}, socket) do
-    updated_docs =
-      Enum.map(socket.assigns.uploaded_docs, fn
-        {:ok, doc} when doc.id == updated.id ->
-          {:ok, Map.put(doc, :status, to_string(updated.status))}
+    in_flight =
+      Enum.map(socket.assigns.in_flight, fn
+        %{id: id} = doc when id == updated.id ->
+          %{doc | status: to_string(updated.status)}
+
         other ->
           other
       end)
 
-    {:noreply, assign(socket, :uploaded_docs, updated_docs)}
+    {:noreply, assign(socket, :in_flight, in_flight)}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_page={:upload}>
-      <div class="max-w-2xl mx-auto py-12 px-4">
-        <h1 class="text-2xl font-bold mb-8">Upload Documents</h1>
+      <div class="max-w-4xl mx-auto py-8 px-4">
+        <h1 class="text-2xl font-bold mb-2">Upload Documents</h1>
+        <p class="text-gray-500 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
 
         <form id="upload-form" phx-change="validate" phx-submit="save">
-          <%!-- Upload zone --%>
           <div
             id="upload-zone"
             phx-drop-target={@uploads.document.ref}
@@ -85,7 +94,6 @@ defmodule SeathWeb.UploadLive do
             <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
           </div>
 
-          <%!-- Upload progress --%>
           <div :for={entry <- @uploads.document.entries} class="mt-4 p-4 bg-white rounded-lg border">
             <div class="flex items-center justify-between mb-2">
               <span class="text-sm font-medium text-gray-700">{entry.client_name}</span>
@@ -100,7 +108,6 @@ defmodule SeathWeb.UploadLive do
             </p>
           </div>
 
-          <%!-- Upload button --%>
           <button
             :if={length(@uploads.document.entries) > 0}
             type="submit"
@@ -110,30 +117,26 @@ defmodule SeathWeb.UploadLive do
           </button>
         </form>
 
-        <%!-- Uploaded documents --%>
-        <div :if={@uploaded_docs != []} class="mt-8">
-          <h2 class="text-lg font-semibold mb-4">Uploaded Documents</h2>
-          <div class="space-y-2">
+        <%!-- Pipeline status --%>
+        <div :if={@in_flight != []} class="mt-8">
+          <h2 class="text-lg font-semibold mb-4">Pipeline Status</h2>
+          <p class="text-sm text-gray-500 mb-4">
+            {@in_flight |> Enum.filter(& &1.status in ~w(pending processing)) |> length()} document(s) in pipeline
+          </p>
+          <div class="space-y-3">
             <div
-              :for={{:ok, doc} <- @uploaded_docs}
-              class="p-3 bg-green-50 border border-green-200 rounded-lg"
+              :for={doc <- @in_flight}
+              class="p-4 bg-white rounded-lg border"
             >
-              <div class="flex items-center gap-2">
-                <.icon name="hero-document-check" class="w-5 h-5 text-green-600" />
-                <span class="text-sm font-medium text-green-800">{doc.file_name}</span>
-                <span class={[
-                  "text-xs px-2 py-0.5 rounded-full font-medium",
-                  case doc.status do
-                    "pending" -> "bg-yellow-100 text-yellow-800"
-                    "processing" -> "bg-blue-100 text-blue-800"
-                    "awaiting_review" -> "bg-purple-100 text-purple-800"
-                    "archived" -> "bg-green-100 text-green-800"
-                    "rejected" -> "bg-red-100 text-red-800"
-                    _ -> "bg-gray-100 text-gray-800"
-                  end
-                ]}>
-                  {doc.status}
-                </span>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 min-w-0">
+                  <.icon name={"hero-document-text"} class="w-5 h-5 shrink-0 text-gray-400" />
+                  <span class="text-sm font-medium text-gray-900 truncate">{doc.title || doc.file_name}</span>
+                </div>
+                <.status_badge status={doc.status} />
+              </div>
+              <div class="mt-3">
+                <.pipeline_bar status={doc.status} />
               </div>
             </div>
           </div>
@@ -142,4 +145,58 @@ defmodule SeathWeb.UploadLive do
     </Layouts.app>
     """
   end
+
+  attr :status, :string, required: true
+
+  def status_badge(assigns) do
+    ~H"""
+    <span class={[
+      "inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium",
+      @status == "pending" && "bg-yellow-50 text-yellow-700 border border-yellow-200",
+      @status == "processing" && "bg-blue-50 text-blue-700 border border-blue-200 animate-pulse",
+      @status == "awaiting_review" && "bg-purple-50 text-purple-700 border border-purple-200",
+      @status == "archived" && "bg-green-50 text-green-700 border border-green-200",
+      @status == "rejected" && "bg-red-50 text-red-700 border border-red-200"
+    ]}>
+      <span :if={@status == "processing"} class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+      {@status}
+    </span>
+    """
+  end
+
+  attr :status, :string, required: true
+
+  def pipeline_bar(assigns) do
+    assigns = assign(assigns, :rank, status_rank(assigns.status))
+
+    ~H"""
+    <div class="flex items-center gap-0 w-full">
+      <div class={["flex-1 h-1.5 rounded-l-full", bar_color(0, @rank)]} />
+      <div class={["flex-1 h-1.5", bar_color(1, @rank)]} />
+      <div class={["flex-1 h-1.5", bar_color(2, @rank)]} />
+      <div class={["flex-1 h-1.5 rounded-r-full", bar_color(3, @rank)]} />
+    </div>
+    <div class="flex justify-between mt-1 text-[10px]">
+      <span class={step_text(0, @rank)}>Uploaded</span>
+      <span class={step_text(1, @rank)}>OCR</span>
+      <span class={step_text(2, @rank)}>Classify</span>
+      <span class={step_text(3, @rank)}>Review</span>
+    </div>
+    """
+  end
+
+  defp bar_color(idx, rank) when idx < rank, do: "bg-green-500"
+  defp bar_color(idx, rank) when idx == rank, do: "bg-blue-500"
+  defp bar_color(_idx, _rank), do: "bg-gray-200"
+
+  defp step_text(idx, rank) when idx < rank, do: "text-green-600"
+  defp step_text(idx, rank) when idx == rank, do: "text-blue-600 font-semibold"
+  defp step_text(_idx, _rank), do: "text-gray-400"
+
+  defp status_rank("pending"), do: 0
+  defp status_rank("processing"), do: 1
+  defp status_rank("awaiting_review"), do: 2
+  defp status_rank("archived"), do: 3
+  defp status_rank("rejected"), do: 4
+  defp status_rank(_), do: 0
 end
