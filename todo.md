@@ -27,6 +27,10 @@
 - [x] build RAG chat LiveView with source citations and pgvector retrieval — genuine differentiator Paperless lacks
 - [ ] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
 
+- [ ] [high] fix RAG chat — embedding-based retrieval broken, needs debugging
+- [ ] [high] fix font rendering on Chat and Review pages — text unreadable despite CSS fixes
+- [ ] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
+
 ## Archive Hygiene — Rules & Automation
 
 - [x] create tag-based archival rules with age threshold — hands-off "arquivo morto" document hygiene
