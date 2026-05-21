@@ -101,8 +101,8 @@ defmodule SeathWeb.UploadLive do
     ~H"""
     <Layouts.app flash={@flash} current_page={:upload}>
       <div class="max-w-4xl mx-auto py-8 px-4">
-        <h1 class="text-2xl font-bold mb-2">Upload Documents</h1>
-        <p class="text-gray-700 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Upload Documents</h1>
+        <p class="text-gray-800 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
         <%!-- Config warnings --%>
 
         <%!-- Config warnings --%>
