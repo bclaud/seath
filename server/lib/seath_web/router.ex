@@ -21,6 +21,7 @@ defmodule SeathWeb.Router do
     live "/upload", UploadLive, :index
     live "/review", ReviewLive, :index
     live "/chat", ChatLive, :index
+    live "/settings", SettingsLive, :index
   end
 
   # Other scopes may use custom stacks.

@@ -65,7 +65,10 @@ defmodule SeathWeb.Layouts do
         </nav>
 
         <div class="p-4 border-t border-gray-700">
-          <.nav_item navigate="/dev/dashboard" icon="hero-cog-6-tooth" active={false}>
+          <.nav_item navigate="/settings" icon="hero-cog-6-tooth" active={@current_page == :settings}>
+            Settings
+          </.nav_item>
+          <.nav_item navigate="/dev/dashboard" icon="hero-chart-bar" active={false}>
             Admin
           </.nav_item>
         </div>
