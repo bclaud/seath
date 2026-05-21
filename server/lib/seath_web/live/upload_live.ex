@@ -67,18 +67,19 @@ defmodule SeathWeb.UploadLive do
 
         <%!-- Upload zone --%>
         <div
+          id="upload-zone"
           phx-drop-target={@uploads.document.ref}
+          phx-hook="UploadZone"
           class={[
-            "border-2 border-dashed border-gray-300 rounded-xl text-center transition-colors",
+            "border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer",
+            "hover:border-blue-400 hover:bg-blue-50 transition-colors",
             length(@uploads.document.entries) > 0 && "border-blue-400 bg-blue-50"
           ]}
         >
-          <label class="block p-12 cursor-pointer hover:border-blue-400 hover:bg-blue-50" for="seath-upload">
-            <.live_file_input upload={@uploads.document} id="seath-upload" />
-            <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
-            <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
-          </label>
+          <.live_file_input upload={@uploads.document} />
+          <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+          <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
+          <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
         </div>
 
         <%!-- Upload progress --%>
