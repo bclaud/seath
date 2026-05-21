@@ -103,3 +103,10 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* daisyUI sets :root { color: var(--color-base-content) } which overrides
+   Tailwind utility classes in the compiled CSS cascade. Force our text
+   colors to take effect so labels and body text are fully readable. */
+.text-gray-700 { color: #374151 !important; }
+.text-gray-800 { color: #1f2937 !important; }
+.text-gray-900 { color: #111827 !important; }

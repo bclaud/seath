@@ -39,3 +39,19 @@
 - [x] add saved searches with tag, type, and date range filters — power users need repeatable document queries
 - [x] create Correspondent schema linked to documents — matches Paperless metadata users already expect
 - [ ] add bulk tag add/remove on search result selection — efficiency for users managing large archives
+
+## Smarter Classification — Context-Aware LLM Pipeline
+
+- [ ] [high] inject similar archived documents into LLM classification prompt via embedding similarity search — classification improves as archive grows, core differentiator
+- [ ] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
+- [ ] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
+- [ ] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
+- [ ] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
+- [ ] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
+
+## Involved Parties — Multi-Entity Extraction
+
+- [ ] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
+- [ ] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
+- [ ] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
+- [ ] add search/filter by involved party name — users need to find all documents mentioning a specific person or company
