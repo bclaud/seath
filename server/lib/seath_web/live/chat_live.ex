@@ -146,13 +146,22 @@ defmodule SeathWeb.ChatLive do
         <div class="flex-1 overflow-y-auto space-y-4 mb-6">
           <div :if={@messages == []} class="flex items-center justify-center h-full">
             <div class="text-center text-base-content/90">
-              <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto mb-4 text-base-content/90" />
+              <.icon
+                name="hero-chat-bubble-left-right"
+                class="w-16 h-16 mx-auto mb-4 text-base-content/90"
+              />
               <p class="text-lg text-base-content/80">Ask a question about your documents</p>
             </div>
           </div>
 
-          <div :for={msg <- @messages} class={"flex #{if msg.role == :user, do: "justify-end", else: "justify-start"}"}>
-            <div :if={msg.role == :user} class="max-w-[70%] bg-blue-600 text-white rounded-2xl px-4 py-3">
+          <div
+            :for={msg <- @messages}
+            class={"flex #{if msg.role == :user, do: "justify-end", else: "justify-start"}"}
+          >
+            <div
+              :if={msg.role == :user}
+              class="max-w-[70%] bg-blue-600 text-white rounded-2xl px-4 py-3"
+            >
               <p class="text-sm">{msg.content}</p>
             </div>
 

@@ -55,11 +55,25 @@ defmodule SeathWeb.Layouts do
           </.nav_item>
           <.nav_item navigate="/review" icon="hero-check-badge" active={@current_page == :review}>
             Review
-            <span :if={@review_count > 0} class="ml-auto bg-yellow-500 text-white text-xs px-2 py-0.5 rounded-full">
+            <span
+              :if={@review_count > 0}
+              class="ml-auto bg-yellow-500 text-white text-xs px-2 py-0.5 rounded-full"
+            >
               {@review_count}
             </span>
           </.nav_item>
-          <.nav_item navigate="/chat" icon="hero-chat-bubble-left-right" active={@current_page == :chat}>
+          <.nav_item
+            navigate="/documents"
+            icon="hero-document-text"
+            active={@current_page == :documents}
+          >
+            Documents
+          </.nav_item>
+          <.nav_item
+            navigate="/chat"
+            icon="hero-chat-bubble-left-right"
+            active={@current_page == :chat}
+          >
             Chat
           </.nav_item>
         </nav>
@@ -175,7 +189,10 @@ defmodule SeathWeb.Layouts do
       href={@navigate}
       class={[
         "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-        if(@active, do: "bg-gray-700 text-white", else: "text-white/40 hover:bg-gray-800 hover:text-white")
+        if(@active,
+          do: "bg-gray-700 text-white",
+          else: "text-white/40 hover:bg-gray-800 hover:text-white"
+        )
       ]}
     >
       <.icon name={@icon} class="w-5 h-5 shrink-0" />

@@ -105,6 +105,7 @@ defmodule Seath.OCR.Ollama do
         cond do
           String.contains?(error, "not found") ->
             {:error, "pdftoppm not found. Install poppler-utils for scanned PDF support."}
+
           true ->
             {:error, {:pdf_conversion_failed, error}}
         end
@@ -118,7 +119,8 @@ defmodule Seath.OCR.Ollama do
       messages: [
         %{
           role: "user",
-          content: "Extract all text from this document image. Return only the extracted text, nothing else.",
+          content:
+            "Extract all text from this document image. Return only the extracted text, nothing else.",
           images: [image_b64]
         }
       ]

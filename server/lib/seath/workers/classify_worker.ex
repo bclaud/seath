@@ -95,7 +95,9 @@ defmodule Seath.Workers.ClassifyWorker do
     doc =
       if result.document_type do
         case DocumentTypes.get_type_by_name(result.document_type) do
-          nil -> doc
+          nil ->
+            doc
+
           type ->
             {:ok, updated} = Documents.update_document(doc, %{document_type_id: type.id})
             updated

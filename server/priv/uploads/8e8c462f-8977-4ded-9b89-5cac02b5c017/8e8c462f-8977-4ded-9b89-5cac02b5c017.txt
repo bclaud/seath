@@ -1,0 +1,8 @@
+title: Test Invoice
+tags: 
+document_type: 
+correspondent: 
+date: 2026-05-21
+status: processing
+---
+Invoice text

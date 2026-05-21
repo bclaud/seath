@@ -156,7 +156,7 @@ defmodule Seath.LLM.Ollama do
 
         {complete_lines, new_buffer} =
           case List.pop_at(lines, -1) do
-            {"" , rest} -> {rest, ""}
+            {"", rest} -> {rest, ""}
             {last, []} -> {[], last}
             {last, rest} -> {rest, last}
           end

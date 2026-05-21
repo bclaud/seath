@@ -35,6 +35,7 @@ defmodule Seath.Documents.Document do
     belongs_to :document_type, Seath.DocumentTypes.DocumentType
     belongs_to :correspondent, Seath.Correspondents.Correspondent
     many_to_many :tags, Seath.Tags.Tag, join_through: "document_tags", on_replace: :delete
+    has_many :involved_parties, Seath.InvolvedParties.InvolvedParty
 
     timestamps(type: :utc_datetime)
   end

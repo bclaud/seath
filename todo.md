@@ -44,22 +44,22 @@
 
 ## Document Explorer — Browse, Search & View
 
-- [ ] [high] build document index LiveView with paginated list of all documents — archived documents are invisible without this
-- [ ] [high] add full-text search bar to document index wired to existing PostgreSQL search — search backend exists but has no UI
-- [ ] [high] add filter sidebar with tag, document type, correspondent, status, and date range — users need to narrow large archives fast
-- [ ] [high] build document detail/show LiveView with full metadata, OCR text, and file preview — no way to view a filed document today
+- [x] [high] build document index LiveView with paginated list of all documents — archived documents are invisible without this
+- [x] [high] add full-text search bar to document index wired to existing PostgreSQL search — search backend exists but has no UI
+- [x] [high] add filter sidebar with tag, document type, correspondent, status, and date range — users need to narrow large archives fast
+- [x] [high] build document detail/show LiveView with full metadata, OCR text, and file preview — no way to view a filed document today
 - [ ] wire saved searches UI into document index — backend CRUD exists but is completely unexposed
-- [ ] fix dashboard "Archived" stat card to link to document index — currently a dead `#` link
+- [x] fix dashboard "Archived" stat card to link to document index — currently a dead `#` link
 - [ ] add document thumbnail generation for visual browsing — Paperless users expect to recognize documents by sight
-- [ ] [quick win] show recent documents on dashboard — gives the home page immediate utility beyond stat counters
-- [ ] add inline document editing (title, tags, type, correspondent) from detail view — users need to correct metadata post-archive without re-processing
+- [x] [quick win] show recent documents on dashboard — gives the home page immediate utility beyond stat counters
+- [x] add inline document editing (title, tags, type, correspondent) from detail view — users need to correct metadata post-archive without re-processing
 
 ## Retrieval Strategy — Hybrid Grep + Semantic Search
 
-- [ ] [high] save OCR text as plain text files alongside original documents — enables grep-based retrieval, external tooling, and full portability
-- [ ] [high] embed structured metadata header in text files (title, tags, type, correspondent, date, involved parties) — LLM can grep by field, not just raw text
-- [ ] regenerate text file when document metadata changes (tag edit, type change, etc.) — metadata in files must stay in sync with database
-- [ ] [high] implement grep-based document retrieval for RAG chat as primary search method — exact matches (names, IDs, dates) are what users search for most
+- [x] [high] save OCR text as plain text files alongside original documents — enables grep-based retrieval, external tooling, and full portability
+- [x] [high] embed structured metadata header in text files (title, tags, type, correspondent, date, involved parties) — LLM can grep by field, not just raw text
+- [x] regenerate text file when document metadata changes (tag edit, type change, etc.) — metadata in files must stay in sync with database
+- [x] [high] implement grep-based document retrieval for RAG chat as primary search method — exact matches (names, IDs, dates) are what users search for most
 - [ ] add tool-use/function-calling pattern to chat LLM — let the model choose between grep and semantic search per query
 - [ ] keep pgvector embeddings as fallback for fuzzy/semantic queries — "docs about my lease" when text says "rental agreement"
 - [ ] use grep-based retrieval for context-aware classification — find prior docs by matching terms without embedding dependency
@@ -69,13 +69,13 @@
 - [ ] [high] inject similar archived documents into classification prompt via grep or embedding search — classification improves as archive grows, core differentiator
 - [ ] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
 - [x] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
-- [ ] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
+- [x] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
 - [ ] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
 - [ ] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
 
 ## Involved Parties — Multi-Entity Extraction
 
-- [ ] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
+- [x] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
 - [ ] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
 - [ ] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
 - [ ] add search/filter by involved party name — users need to find all documents mentioning a specific person or company

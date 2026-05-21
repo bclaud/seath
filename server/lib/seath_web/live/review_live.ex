@@ -221,7 +221,9 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- Document type --%>
               <div class="mb-6">
-                <label class="block text-sm font-semibold text-base-content mb-1">Document Type</label>
+                <label class="block text-sm font-semibold text-base-content mb-1">
+                  Document Type
+                </label>
                 <p class="text-base-content">
                   {if @selected_doc.document_type, do: @selected_doc.document_type.name, else: "None"}
                 </p>
@@ -289,7 +291,9 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- OCR Text preview --%>
               <div class="mb-6">
-                <label class="block text-sm font-semibold text-base-content mb-1">Extracted Text</label>
+                <label class="block text-sm font-semibold text-base-content mb-1">
+                  Extracted Text
+                </label>
                 <div class="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
                   <p class="text-sm text-base-content/90 whitespace-pre-wrap">
                     {if @selected_doc.ocr_text,
@@ -324,7 +328,10 @@ defmodule SeathWeb.ReviewLive do
           <%!-- Empty state --%>
           <div :if={!@selected_doc} class="lg:col-span-2 flex items-center justify-center">
             <div class="text-center text-base-content/90">
-              <.icon name="hero-document-magnifying-glass" class="w-16 h-16 mx-auto mb-4 text-base-content/90" />
+              <.icon
+                name="hero-document-magnifying-glass"
+                class="w-16 h-16 mx-auto mb-4 text-base-content/90"
+              />
               <p class="text-lg text-base-content font-medium">Select a document to review</p>
             </div>
           </div>

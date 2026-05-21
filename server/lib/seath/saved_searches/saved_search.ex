@@ -19,7 +19,15 @@ defmodule Seath.SavedSearches.SavedSearch do
 
   def changeset(search, attrs) do
     search
-    |> cast(attrs, [:name, :query, :tag_ids, :document_type_id, :status_filter, :date_from, :date_to])
+    |> cast(attrs, [
+      :name,
+      :query,
+      :tag_ids,
+      :document_type_id,
+      :status_filter,
+      :date_from,
+      :date_to
+    ])
     |> validate_required([:name])
   end
 end

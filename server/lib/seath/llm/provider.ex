@@ -46,6 +46,4 @@ defmodule Seath.LLM.Provider do
               opts :: keyword(),
               stream_to :: pid()
             ) :: {:ok, String.t()} | {:error, term()}
-
-
 end

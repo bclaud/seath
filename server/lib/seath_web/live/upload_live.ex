@@ -54,8 +54,9 @@ defmodule SeathWeb.UploadLive do
      |> assign(:in_flight, successes ++ socket.assigns.in_flight)
      |> put_flash(:info, "#{length(successes)} document(s) uploaded — pipeline started")
      |> then(fn s ->
-       if errors != [], do: put_flash(s, :error, "#{length(errors)} document(s) failed"),
-       else: s
+       if errors != [],
+         do: put_flash(s, :error, "#{length(errors)} document(s) failed"),
+         else: s
      end)}
   end
 
@@ -80,7 +81,8 @@ defmodule SeathWeb.UploadLive do
       {:document_updated, %{id: doc.id, status: "pending"}}
     )
 
-    {:noreply, assign(socket, :in_flight, in_flight) |> put_flash(:info, "Document queued for retry")}
+    {:noreply,
+     assign(socket, :in_flight, in_flight) |> put_flash(:info, "Document queued for retry")}
   end
 
   @impl true
@@ -89,6 +91,7 @@ defmodule SeathWeb.UploadLive do
       Enum.map(socket.assigns.in_flight, fn
         %{id: id} = doc when id == updated.id ->
           %{doc | status: to_string(updated.status)}
+
         other ->
           other
       end)
@@ -102,22 +105,32 @@ defmodule SeathWeb.UploadLive do
     <Layouts.app flash={@flash} current_page={:upload}>
       <div class="max-w-4xl mx-auto py-8 px-4">
         <h1 class="text-2xl font-bold text-base-content mb-2">Upload Documents</h1>
-        <p class="text-base-content/90 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
+        <p class="text-base-content/90 mb-8">
+          Files are automatically OCR'd, classified, and sent to review
+        </p>
         <%!-- Config warnings --%>
 
         <%!-- Config warnings --%>
-        <div :if={!@ocr_configured} class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
+        <div
+          :if={!@ocr_configured}
+          class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3"
+        >
           <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-yellow-600 shrink-0" />
           <p class="text-sm text-yellow-800">
             No OCR provider configured.
-            <a href="/settings" class="underline font-medium hover:text-yellow-900">Go to Settings</a> to enable document processing.
+            <a href="/settings" class="underline font-medium hover:text-yellow-900">Go to Settings</a>
+            to enable document processing.
           </p>
         </div>
-        <div :if={!@llm_configured} class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
+        <div
+          :if={!@llm_configured}
+          class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3"
+        >
           <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-yellow-600 shrink-0" />
           <p class="text-sm text-yellow-800">
             No LLM provider configured.
-            <a href="/settings" class="underline font-medium hover:text-yellow-900">Go to Settings</a> to enable classification and chat.
+            <a href="/settings" class="underline font-medium hover:text-yellow-900">Go to Settings</a>
+            to enable classification and chat.
           </p>
         </div>
 
@@ -144,7 +157,10 @@ defmodule SeathWeb.UploadLive do
               <span class="text-sm text-base-content/90">{entry.progress}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2">
-              <div class="bg-blue-500 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}>
+              <div
+                class="bg-blue-500 h-2 rounded-full transition-all"
+                style={"width: #{entry.progress}%"}
+              >
               </div>
             </div>
             <p :if={entry.valid? == false} class="text-sm text-red-500 mt-2">
@@ -165,21 +181,27 @@ defmodule SeathWeb.UploadLive do
         <div :if={@in_flight != []} class="mt-8">
           <h2 class="text-lg font-semibold mb-2">Pipeline Status</h2>
           <p class="text-sm text-base-content/90 mb-4">
-            <span class="text-yellow-600">{count_by_status(@in_flight, "pending")}</span> pending ·
-            <span class="text-blue-600">{count_by_status(@in_flight, "processing")}</span> processing ·
-            <span class="text-red-600">{count_by_status(@in_flight, "error")}</span> failed
+            <span class="text-yellow-600">{count_by_status(@in_flight, "pending")}</span>
+            pending · <span class="text-blue-600">{count_by_status(@in_flight, "processing")}</span>
+            processing · <span class="text-red-600">{count_by_status(@in_flight, "error")}</span>
+            failed
           </p>
           <div class="space-y-3">
-            <div :for={doc <- @in_flight} class={[
-              "p-4 bg-white rounded-lg border",
-              doc.status == "error" && "border-red-200",
-              doc.status == "pending" && "border-yellow-200",
-              doc.status == "processing" && "border-blue-200"
-            ]}>
+            <div
+              :for={doc <- @in_flight}
+              class={[
+                "p-4 bg-white rounded-lg border",
+                doc.status == "error" && "border-red-200",
+                doc.status == "pending" && "border-yellow-200",
+                doc.status == "processing" && "border-blue-200"
+              ]}
+            >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 min-w-0">
                   <.icon name="hero-document-text" class="w-5 h-5 shrink-0 text-base-content/90" />
-                  <span class="text-sm font-medium text-base-content truncate">{doc.title || doc.file_name}</span>
+                  <span class="text-sm font-medium text-base-content truncate">
+                    {doc.title || doc.file_name}
+                  </span>
                 </div>
                 <.status_badge status={doc.status} />
               </div>
@@ -188,7 +210,10 @@ defmodule SeathWeb.UploadLive do
                 <.pipeline_bar status={doc.status} />
               </div>
 
-              <div :if={doc.status == "error"} class="mt-3 p-3 bg-red-50 rounded-lg border border-red-100">
+              <div
+                :if={doc.status == "error"}
+                class="mt-3 p-3 bg-red-50 rounded-lg border border-red-100"
+              >
                 <p class="text-xs text-red-700 font-mono whitespace-pre-wrap">{doc.error_message}</p>
                 <button
                   phx-click="retry"

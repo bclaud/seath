@@ -89,6 +89,7 @@ defmodule Seath.Settings do
     case settings.ocr_provider do
       "azure" ->
         Application.put_env(:seath, :ocr_provider, Seath.OCR.Azure)
+
         Application.put_env(:seath, Seath.OCR.Azure,
           endpoint: settings.azure_endpoint,
           key: settings.azure_key
@@ -96,6 +97,7 @@ defmodule Seath.Settings do
 
       "ollama" ->
         Application.put_env(:seath, :ocr_provider, Seath.OCR.Ollama)
+
         Application.put_env(:seath, Seath.OCR.Ollama,
           base_url: settings.ollama_base_url,
           model: settings.ollama_ocr_model
@@ -109,6 +111,7 @@ defmodule Seath.Settings do
     case settings.llm_provider do
       "ollama" ->
         Application.put_env(:seath, :llm_provider, Seath.LLM.Ollama)
+
         Application.put_env(:seath, Seath.LLM.Ollama,
           base_url: settings.ollama_base_url,
           model: settings.ollama_llm_model

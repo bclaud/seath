@@ -6,6 +6,7 @@ defmodule Seath.Tags do
   import Ecto.Query, warn: false
   alias Seath.Repo
   alias Seath.Tags.Tag
+  alias Seath.Documents
   alias Seath.Documents.Document
 
   @doc """
@@ -55,7 +56,7 @@ defmodule Seath.Tags do
   end
 
   @doc """
-  Adds a tag to a document.
+  Adds a tag to a document and regenerates the text file.
   """
   def add_tag_to_document(%Document{} = document, %Tag{} = tag) do
     document = Repo.preload(document, :tags)
@@ -67,21 +68,41 @@ defmodule Seath.Tags do
         document.tags ++ [tag]
       end
 
-    document
-    |> Ecto.Changeset.change()
-    |> Ecto.Changeset.put_assoc(:tags, tags)
-    |> Repo.update()
+    case document
+         |> Ecto.Changeset.change()
+         |> Ecto.Changeset.put_assoc(:tags, tags)
+         |> Repo.update() do
+      {:ok, updated} ->
+        if updated.ocr_text && updated.ocr_text != "" do
+          Documents.regenerate_text_file(updated)
+        end
+
+        {:ok, updated}
+
+      error ->
+        error
+    end
   end
 
   @doc """
-  Removes a tag from a document.
+  Removes a tag from a document and regenerates the text file.
   """
   def remove_tag_from_document(%Document{} = document, %Tag{} = tag) do
     document = Repo.preload(document, :tags)
 
-    document
-    |> Ecto.Changeset.change()
-    |> Ecto.Changeset.put_assoc(:tags, Enum.reject(document.tags, &(&1.id == tag.id)))
-    |> Repo.update()
+    case document
+         |> Ecto.Changeset.change()
+         |> Ecto.Changeset.put_assoc(:tags, Enum.reject(document.tags, &(&1.id == tag.id)))
+         |> Repo.update() do
+      {:ok, updated} ->
+        if updated.ocr_text && updated.ocr_text != "" do
+          Documents.regenerate_text_file(updated)
+        end
+
+        {:ok, updated}
+
+      error ->
+        error
+    end
   end
 end
