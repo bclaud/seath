@@ -28,28 +28,23 @@ defmodule SeathWeb.UploadLive do
 
     results =
       consume_uploaded_entries(socket, :document, fn %{path: path}, entry ->
-        IO.inspect(path, label: "upload temp path")
-        IO.inspect(File.exists?(path), label: "temp file exists")
-
-        result = Seath.Documents.ingest(path, entry.client_name)
-        IO.inspect(result, label: "ingest result")
-        result
+        case Seath.Documents.ingest(path, entry.client_name) do
+          {:ok, doc} -> {:ok, doc}
+          {:error, reason} -> {:ok, %{error: reason, name: entry.client_name}}
+        end
       end)
 
-    IO.inspect(results, label: "consume results")
-    successes = Enum.filter(results, &match?({:ok, _}, &1))
-    failures = Enum.filter(results, &(elem(&1, 0) == :error))
+    docs = Enum.filter(results, &is_struct(&1, Seath.Documents.Document))
+    errors = Enum.reject(results, &is_struct(&1, Seath.Documents.Document))
 
-    socket =
-      socket
-      |> assign(:uploaded_docs, successes ++ socket.assigns.uploaded_docs)
-      |> put_flash(:info, "#{length(successes)} document(s) uploaded")
-
-    if failures != [] do
-      {:noreply, put_flash(socket, :error, "#{length(failures)} document(s) failed to upload")}
-    else
-      {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> assign(:uploaded_docs, docs ++ socket.assigns.uploaded_docs)
+     |> put_flash(:info, "#{length(docs)} document(s) uploaded successfully")
+     |> then(fn s ->
+       if errors != [], do: put_flash(s, :error, "#{length(errors)} document(s) failed"),
+       else: s
+     end)}
   end
 
   @impl true
