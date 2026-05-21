@@ -11,7 +11,9 @@ defmodule Seath.TestLLMProvider do
        title: "Test Invoice",
        document_type: "invoice",
        tags: ["invoice", "finance"],
-       confidence: 0.9
+       confidence: 0.9,
+       correspondent: "Acme Corp",
+       involved_parties: [%{name: "Acme Corp", role: "sender"}]
      }}
   end
 

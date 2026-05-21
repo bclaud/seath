@@ -1,13 +1,11 @@
 defmodule Seath.Workers.ClassifyWorker do
   @moduledoc """
-  Oban worker that classifies a document using multi-step LLM classification.
+  Oban worker that classifies a document using the LLM.
 
-  Fetches the document, validates OCR text is present, runs multi-step
-  classification (metadata, tags, correspondent, involved parties),
-  applies the results, and transitions the document to awaiting_review.
-
-  If the multi-step classification fails, falls back to the legacy
-  one-shot classification for backward compatibility.
+  Fetches the document, validates OCR text is present, runs classification
+  (which now extracts title, document_type, tags, correspondent, and
+  involved parties in a single JSON call), applies the results, and
+  transitions the document to awaiting_review.
 
   On failure, marks the document as error with a descriptive message.
   """
@@ -24,10 +22,7 @@ defmodule Seath.Workers.ClassifyWorker do
   def perform(%Oban.Job{args: %{"document_id" => id}}) do
     with {:ok, doc} <- fetch_document(id),
          {:ok, text} <- validate_ocr_text(doc),
-         tags <- Tags.list_tags() |> Enum.map(& &1.name),
-         types <- DocumentTypes.list_types() |> Enum.map(& &1.name),
-         correspondents <- Correspondents.list_correspondents() |> Enum.map(& &1.name),
-         {:ok, result} <- classify(text, tags, types, correspondents),
+         {:ok, result} <- classify(text),
          {:ok, doc} <- apply_classification(doc, result) do
       Phoenix.PubSub.broadcast(
         Seath.PubSub,
@@ -85,33 +80,15 @@ defmodule Seath.Workers.ClassifyWorker do
     end
   end
 
-  defp classify(text, tags, types, correspondents) do
-    case Seath.LLM.Classify.classify_document(text, tags, types, correspondents) do
-      {:ok, result} ->
-        {:ok, result}
+  defp classify(text) do
+    # Load available tags, types, correspondents once
+    tags = Tags.list_tags()
+    types = DocumentTypes.list_types()
 
-      {:error, _reason} ->
-        Logger.warning("Multi-step classification failed, falling back to one-shot classify")
-        fallback_classify(text, tags, types)
-    end
-  end
+    tag_names = Enum.map(tags, & &1.name)
+    type_names = Enum.map(types, & &1.name)
 
-  defp fallback_classify(text, tags, types) do
-    case Seath.LLM.classify(text, tags, types) do
-      {:ok, result} ->
-        {:ok,
-         %{
-           title: result.title,
-           document_type: result.document_type,
-           tags: result.tags,
-           confidence: result.confidence,
-           correspondent: nil,
-           involved_parties: []
-         }}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Seath.LLM.classify(text, tag_names, type_names)
   end
 
   defp apply_classification(doc, result) do
@@ -119,33 +96,42 @@ defmodule Seath.Workers.ClassifyWorker do
     {:ok, doc} =
       Documents.update_document(doc, %{title: result.title, confidence: result.confidence})
 
-    # Apply tags — validate against existing tags, create if needed
-    doc = apply_tags(doc, result.tags)
-
-    # Apply document type — validate against existing types
+    # Apply document type — validate against existing types (case-insensitive)
     doc = apply_document_type(doc, result.document_type)
 
-    # Apply correspondent — match against existing correspondents, don't create new ones
-    doc = apply_correspondent(doc, result.correspondent)
+    # Apply tags — validate against existing, create new ones if needed
+    doc = apply_tags(doc, result.tags)
+
+    # Apply correspondent — match against existing (case-insensitive), don't auto-create
+    doc = apply_correspondent(doc, Map.get(result, :correspondent))
 
     # Apply involved parties — create entries for extracted entities
-    apply_involved_parties(doc, result.involved_parties)
+    apply_involved_parties(doc, Map.get(result, :involved_parties, []))
 
     # Transition to awaiting_review
     Documents.transition_status(doc, "awaiting_review")
   end
 
   defp apply_tags(doc, tag_names) when is_list(tag_names) do
-    validated_tags = validate_tag_names(tag_names)
+    # Load all tags once for validation
+    existing_tags = Tags.list_tags()
+    existing_lower = Map.new(existing_tags, fn t -> {String.downcase(t.name), t} end)
 
-    Enum.each(validated_tags, fn tag_name ->
-      case Tags.get_tag_by_name(tag_name) do
-        nil ->
-          {:ok, tag} = Tags.create_tag(%{name: tag_name})
-          Tags.add_tag_to_document(doc, tag)
+    Enum.each(tag_names, fn name ->
+      name_str = to_string(name) |> String.trim()
 
-        tag ->
-          Tags.add_tag_to_document(doc, tag)
+      if name_str != "" do
+        case Map.get(existing_lower, String.downcase(name_str)) do
+          nil ->
+            # Create new tag
+            case Tags.create_tag(%{name: name_str}) do
+              {:ok, tag} -> Tags.add_tag_to_document(doc, tag)
+              _ -> :ok
+            end
+
+          tag ->
+            Tags.add_tag_to_document(doc, tag)
+        end
       end
     end)
 
@@ -156,90 +142,65 @@ defmodule Seath.Workers.ClassifyWorker do
 
   defp apply_document_type(doc, nil), do: doc
 
-  defp apply_document_type(doc, type_name) do
-    case DocumentTypes.get_type_by_name(type_name) do
-      nil ->
-        # Also try case-insensitive match
-        matched_type = find_type_case_insensitive(type_name)
+  defp apply_document_type(doc, type_name) when is_binary(type_name) do
+    type_name = String.trim(type_name)
 
-        case matched_type do
-          nil ->
-            doc
+    if type_name == "" do
+      doc
+    else
+      all_types = DocumentTypes.list_types()
+      matched = Enum.find(all_types, fn t -> String.downcase(t.name) == String.downcase(type_name) end)
 
-          type ->
-            {:ok, updated} = Documents.update_document(doc, %{document_type_id: type.id})
-            updated
-        end
-
-      type ->
-        {:ok, updated} = Documents.update_document(doc, %{document_type_id: type.id})
-        updated
+      case matched do
+        nil -> doc
+        type ->
+          {:ok, updated} = Documents.update_document(doc, %{document_type_id: type.id})
+          updated
+      end
     end
   end
+
+  defp apply_document_type(doc, _), do: doc
 
   defp apply_correspondent(doc, nil), do: doc
 
-  defp apply_correspondent(doc, corr_name) do
-    # Try to find an existing correspondent (case-insensitive)
-    existing = find_correspondent_case_insensitive(corr_name)
+  defp apply_correspondent(doc, corr_name) when is_binary(corr_name) do
+    corr_name = String.trim(corr_name)
 
-    case existing do
-      nil ->
-        # Don't create new correspondents automatically — user can set manually
-        doc
+    if corr_name == "" do
+      doc
+    else
+      all_corrs = Correspondents.list_correspondents()
+      matched = Enum.find(all_corrs, fn c -> String.downcase(c.name) == String.downcase(corr_name) end)
 
-      correspondent ->
-        {:ok, updated} = Documents.update_document(doc, %{correspondent_id: correspondent.id})
-        updated
+      case matched do
+        nil -> doc
+        correspondent ->
+          {:ok, updated} = Documents.update_document(doc, %{correspondent_id: correspondent.id})
+          updated
+      end
     end
   end
 
-  defp apply_involved_parties(doc, parties) when is_list(parties) and parties != [] do
-    normalized_parties =
-      Enum.map(parties, fn party ->
-        %{name: party.name, role: party.role, document_id: doc.id}
-      end)
+  defp apply_correspondent(doc, _), do: doc
 
-    InvolvedParties.replace_parties_for_document(doc.id, normalized_parties)
+  defp apply_involved_parties(doc, parties) when is_list(parties) and parties != [] do
+    normalized =
+      Enum.map(parties, fn party ->
+        %{
+          name: Map.get(party, :name, "") |> to_string(),
+          role: Map.get(party, :role, "other") |> to_string(),
+          document_id: doc.id
+        }
+      end)
+      |> Enum.reject(&(&1.name == ""))
+
+    if normalized != [] do
+      InvolvedParties.replace_parties_for_document(doc.id, normalized)
+    end
+
     doc
   end
 
-  defp apply_involved_parties(_doc, _), do: :ok
-
-  # --- Validation helpers ---
-
-  defp validate_tag_names(tag_names) when is_list(tag_names) do
-    all_tags = Tags.list_tags() |> Enum.map(&String.downcase(&1.name))
-    all_tag_names = Tags.list_tags() |> Enum.map(& &1.name)
-
-    Enum.flat_map(tag_names, fn name ->
-      name_str = to_string(name)
-
-      cond do
-        Enum.member?(all_tag_names, name_str) ->
-          [name_str]
-
-        Enum.member?(all_tags, String.downcase(name_str)) ->
-          # Case-insensitive match — return the original cased name
-          idx = Enum.find_index(all_tags, &(&1 == String.downcase(name_str)))
-          [Enum.at(all_tag_names, idx)]
-
-        true ->
-          # Allow creating new tags for unmatched names
-          [name_str]
-      end
-    end)
-  end
-
-  defp validate_tag_names(_), do: []
-
-  defp find_type_case_insensitive(name) do
-    all_types = DocumentTypes.list_types()
-    Enum.find(all_types, fn t -> String.downcase(t.name) == String.downcase(name) end)
-  end
-
-  defp find_correspondent_case_insensitive(name) do
-    all_corrs = Correspondents.list_correspondents()
-    Enum.find(all_corrs, fn c -> String.downcase(c.name) == String.downcase(name) end)
-  end
+  defp apply_involved_parties(doc, _), do: doc
 end

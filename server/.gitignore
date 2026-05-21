@@ -35,3 +35,6 @@ seath-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# User-uploaded documents and generated text files
+/priv/uploads/
+

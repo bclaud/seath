@@ -113,20 +113,29 @@ defmodule Seath.OCR.Ollama do
   end
 
   defp send_to_ollama(image_b64, base_url, model) do
+    language = Application.get_env(:seath, :document_language, "Portuguese")
+
     body = %{
       model: model,
       stream: false,
       messages: [
         %{
           role: "user",
-          content:
-            "Extract all text from this document image. Return only the extracted text, nothing else.",
+          content: """
+          Just transcribe the text in this image and preserve the formatting and layout (high quality OCR).
+          Do that for ALL the text in the image. Be thorough and pay attention. This is very important.
+          The image is from a text document so be sure to continue until the bottom of the page.
+          The document is likely in #{language}.
+          Thanks a lot! You tend to forget about some text in the image so please focus!
+          Pay special attention to monetary amounts, totals, invoice numbers, dates, tax IDs (CNPJ/CPF), and company names.
+          Use markdown format but without a code block.
+          """,
           images: [image_b64]
         }
       ]
     }
 
-    case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 60_000) do
+    case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
       {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
         {:ok, String.trim(content)}
 

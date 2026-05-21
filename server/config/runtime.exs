@@ -147,3 +147,8 @@ config :seath, Seath.OCR.Ollama,
 config :seath, Seath.LLM.Ollama,
   base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
   model: System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+
+# Document language hint for OCR and classification prompts.
+# Helps the LLM understand the document's language for better extraction.
+# Default: "Portuguese" — change via DOCUMENT_LANGUAGE env var.
+config :seath, :document_language, System.get_env("DOCUMENT_LANGUAGE", "Portuguese")

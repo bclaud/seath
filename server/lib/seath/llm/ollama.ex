@@ -47,20 +47,35 @@ defmodule Seath.LLM.Ollama do
   end
 
   defp do_classify(text, available_tags, available_types, base_url, model) do
+    language = Application.get_env(:seath, :document_language, "Portuguese")
     tags_list = Enum.join(available_tags, ", ")
     types_list = Enum.join(available_types, ", ")
 
     prompt = """
-    You are a document classification assistant. Analyze the following document text and return a JSON object with:
-    - "title": a concise title for the document (max 80 chars)
-    - "document_type": the best matching type from this list: [#{types_list}], or null if none match
-    - "tags": an array of relevant tags from this list: [#{tags_list}]. Only include tags that clearly apply.
-    - "confidence": a number between 0.0 and 1.0 indicating how confident you are in this classification
+    I will provide you with the content of a document that has been read by OCR (so it may contain errors).
+    Your task is to classify this document. The content is likely in #{language}.
 
-    Document text:
+    <available_document_types>
+    #{types_list}
+    </available_document_types>
+
+    <available_tags>
+    #{tags_list}
+    </available_tags>
+
+    <content>
     #{String.slice(text, 0, 4000)}
+    </content>
 
-    Return ONLY the JSON object, no other text.
+    Respond with ONLY a JSON object with these fields:
+    {
+      "title": "a concise, descriptive title for this document (max 80 chars, in the document's language)",
+      "document_type": "the single best matching type from <available_document_types>, or null if none match. Be sure to match: invoices/notas fiscais → invoice, emails → email, contracts → contract, etc.",
+      "tags": ["only tags from <available_tags> that clearly apply — be selective"],
+      "confidence": 0.85,
+      "correspondent": "the main sender or issuing company/person of this document, or null if unclear. Use a short, clean name without legal suffixes like Ltda, S.A., GmbH",
+      "involved_parties": [{"name": "Entity Name", "role": "sender or recipient or subject or other"}]
+    }
     """
 
     body = %{
@@ -70,7 +85,7 @@ defmodule Seath.LLM.Ollama do
       format: "json"
     }
 
-    case Req.post("#{base_url}/api/chat", json: body) do
+    case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
       {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
         parse_classification(content)
 
@@ -237,13 +252,7 @@ defmodule Seath.LLM.Ollama do
   defp parse_classification(content) do
     case Jason.decode(content) do
       {:ok, %{"title" => title} = result} ->
-        {:ok,
-         %{
-           title: title,
-           document_type: Map.get(result, "document_type"),
-           tags: Map.get(result, "tags", []),
-           confidence: Map.get(result, "confidence", 0.5)
-         }}
+        {:ok, build_result(title, result)}
 
       {:ok, _} ->
         {:error, :invalid_response_format}
@@ -254,13 +263,7 @@ defmodule Seath.LLM.Ollama do
           [json_str] ->
             case Jason.decode(json_str) do
               {:ok, %{"title" => title} = result} ->
-                {:ok,
-                 %{
-                   title: title,
-                   document_type: Map.get(result, "document_type"),
-                   tags: Map.get(result, "tags", []),
-                   confidence: Map.get(result, "confidence", 0.5)
-                 }}
+                {:ok, build_result(title, result)}
 
               _ ->
                 {:error, :invalid_response_format}
@@ -270,5 +273,38 @@ defmodule Seath.LLM.Ollama do
             {:error, :invalid_response_format}
         end
     end
+  end
+
+  defp build_result(title, result) do
+    involved_parties =
+      case Map.get(result, "involved_parties", []) do
+        parties when is_list(parties) ->
+          Enum.map(parties, fn p ->
+            %{
+              name: to_string(Map.get(p, "name", "")),
+              role: to_string(Map.get(p, "role", "other"))
+            }
+          end)
+          |> Enum.reject(&(&1.name == ""))
+
+        _ ->
+          []
+      end
+
+    correspondent =
+      case Map.get(result, "correspondent") do
+        nil -> nil
+        name when is_binary(name) and name != "" -> String.trim(name)
+        _ -> nil
+      end
+
+    %{
+      title: title,
+      document_type: Map.get(result, "document_type"),
+      tags: Map.get(result, "tags", []),
+      confidence: Map.get(result, "confidence", 0.5),
+      correspondent: correspondent,
+      involved_parties: involved_parties
+    }
   end
 end

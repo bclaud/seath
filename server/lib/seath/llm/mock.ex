@@ -11,7 +11,9 @@ defmodule Seath.LLM.Mock do
        title: "Untitled Document",
        document_type: nil,
        tags: [],
-       confidence: 0.5
+       confidence: 0.5,
+       correspondent: nil,
+       involved_parties: []
      }}
   end
 
