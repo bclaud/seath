@@ -1,8 +1,0 @@
-title: Test Invoice
-tags: invoice, finance
-document_type: 
-correspondent: 
-date: 2026-05-21
-status: awaiting_review
----
-Invoice text

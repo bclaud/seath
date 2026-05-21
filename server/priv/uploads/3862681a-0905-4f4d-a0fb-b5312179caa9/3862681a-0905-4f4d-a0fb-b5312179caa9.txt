@@ -1,8 +1,0 @@
-title: Untitled Document
-tags: 
-document_type: 
-correspondent: 
-date: 2026-05-21
-status: awaiting_review
----
-Some extracted text
