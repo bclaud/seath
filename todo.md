@@ -68,7 +68,7 @@
 
 - [ ] [high] inject similar archived documents into classification prompt via grep or embedding search — classification improves as archive grows, core differentiator
 - [ ] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
-- [ ] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
+- [x] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
 - [ ] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
 - [ ] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
 - [ ] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
