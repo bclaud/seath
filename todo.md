@@ -75,12 +75,12 @@
 - [x] add correspondent extraction to search/match existing correspondents during classification
 - [x] add involved parties extraction (named entities) during classification — enables "show me everything involving X" queries
 - [x] update OCR worker with optional vision-LLM OCR fallback — better structured data extraction for invoices/receipts
-- [ ] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
-- [ ] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
+- [x] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
+- [x] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
 
 ## Involved Parties — Multi-Entity Extraction
 
 - [x] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
 - [x] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
-- [ ] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
+- [x] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
 - [ ] add search/filter by involved party name — users need to find all documents mentioning a specific person or company
