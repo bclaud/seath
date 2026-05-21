@@ -13,16 +13,24 @@ defmodule Seath.Application do
       {DNSCluster, query: Application.get_env(:seath, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Seath.PubSub},
       {Oban, Application.fetch_env!(:seath, Oban)},
-      # Start a worker by calling: Seath.Worker.start_link(arg)
-      # {Seath.Worker, arg},
-      # Start to serve requests, typically the last entry
       SeathWeb.Endpoint
     ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Seath.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    with {:ok, pid} <- Supervisor.start_link(children, opts) do
+      # Load persisted settings from database after app starts
+      load_settings()
+      {:ok, pid}
+    end
+  end
+
+  defp load_settings do
+    try do
+      Seath.Settings.load_and_apply()
+    rescue
+      _ -> :ok
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

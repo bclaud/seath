@@ -3,75 +3,57 @@ defmodule SeathWeb.SettingsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    ocr_provider = Application.get_env(:seath, :ocr_provider)
-    llm_provider = Application.get_env(:seath, :llm_provider)
-    azure_config = Application.get_env(:seath, Seath.OCR.Azure, [])
-    ollama_ocr_config = Application.get_env(:seath, Seath.OCR.Ollama, [])
-    ollama_llm_config = Application.get_env(:seath, Seath.LLM.Ollama, [])
-    base_url = ollama_ocr_config[:base_url] || System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
-    ocr_model = ollama_ocr_config[:model] || System.get_env("OLLAMA_OCR_MODEL", "llava")
-    llm_model = ollama_llm_config[:model] || System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+    s = Seath.Settings.get_or_default()
 
     {:ok,
      socket
-     |> assign(:ocr_provider, ocr_provider_name(ocr_provider))
-     |> assign(:llm_provider, llm_provider_name(llm_provider))
-     |> assign(:azure_endpoint, azure_config[:endpoint] || System.get_env("AZURE_DI_ENDPOINT", ""))
-     |> assign(:azure_key, azure_config[:key] || System.get_env("AZURE_DI_KEY", ""))
-     |> assign(:ollama_base_url, base_url)
-     |> assign(:ollama_ocr_model, ocr_model)
-     |> assign(:ollama_llm_model, llm_model)
-             |> assign(:ollama_connected, false)
-             |> assign(:ollama_model_available, nil)
-             |> assign(:testing, false)
-             |> assign(:tested, false)}
+     |> assign(:ocr_provider, s.ocr_provider || "")
+     |> assign(:llm_provider, s.llm_provider || "")
+     |> assign(:azure_endpoint, s.azure_endpoint || "")
+     |> assign(:azure_key, s.azure_key || "")
+     |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
+     |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llava")
+     |> assign(:ollama_llm_model, s.ollama_llm_model || "llama3.2")
+     |> assign(:ollama_connected, false)
+     |> assign(:ollama_model_available, nil)
+     |> assign(:testing, false)
+     |> assign(:tested, false)}
   end
 
   @impl true
   def handle_event("save", params, socket) do
-    ocr = params["ocr_provider"]
-    llm = params["llm_provider"]
-    base_url = params["ollama_base_url"] || "http://localhost:11434"
+    attrs = %{
+      ocr_provider: params["ocr_provider"] || "",
+      llm_provider: params["llm_provider"] || "",
+      azure_endpoint: params["azure_endpoint"] || "",
+      azure_key: params["azure_key"] || "",
+      ollama_base_url: params["ollama_base_url"] || "http://localhost:11434",
+      ollama_ocr_model: params["ollama_ocr_model"] || "llava",
+      ollama_llm_model: params["ollama_llm_model"] || "llama3.2"
+    }
 
-    Application.delete_env(:seath, :ocr_provider)
-    Application.delete_env(:seath, :llm_provider)
+    case Seath.Settings.save(attrs) do
+      {:ok, s} ->
+        Phoenix.PubSub.broadcast(
+          Seath.PubSub,
+          "settings",
+          {:settings_updated, s}
+        )
 
-    case ocr do
-      "azure" ->
-        Application.put_env(:seath, :ocr_provider, Seath.OCR.Azure)
-        Application.put_env(:seath, Seath.OCR.Azure,
-          endpoint: params["azure_endpoint"],
-          key: params["azure_key"]
-        )
-      "ollama" ->
-        Application.put_env(:seath, :ocr_provider, Seath.OCR.Ollama)
-        Application.put_env(:seath, Seath.OCR.Ollama,
-          base_url: base_url,
-          model: params["ollama_ocr_model"]
-        )
-      _ -> :ok
+        {:noreply,
+         socket
+         |> assign(:ocr_provider, s.ocr_provider || "")
+         |> assign(:llm_provider, s.llm_provider || "")
+         |> assign(:azure_endpoint, s.azure_endpoint || "")
+         |> assign(:azure_key, s.azure_key || "")
+         |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
+         |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llava")
+         |> assign(:ollama_llm_model, s.ollama_llm_model || "llama3.2")
+         |> put_flash(:info, "Settings saved!")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to save settings")}
     end
-
-    case llm do
-      "ollama" ->
-        Application.put_env(:seath, :llm_provider, Seath.LLM.Ollama)
-        Application.put_env(:seath, Seath.LLM.Ollama,
-          base_url: base_url,
-          model: params["ollama_llm_model"]
-        )
-      _ -> :ok
-    end
-
-    {:noreply,
-     socket
-     |> assign(:ocr_provider, ocr)
-     |> assign(:llm_provider, llm)
-     |> assign(:azure_endpoint, params["azure_endpoint"] || "")
-     |> assign(:azure_key, params["azure_key"] || "")
-     |> assign(:ollama_base_url, base_url)
-     |> assign(:ollama_ocr_model, params["ollama_ocr_model"] || "llava")
-     |> assign(:ollama_llm_model, params["ollama_llm_model"] || "llama3.2")
-     |> put_flash(:info, "Settings saved!")}
   end
 
   @impl true
@@ -126,15 +108,6 @@ defmodule SeathWeb.SettingsLive do
         |> put_flash(:error, "Connection failed: #{inspect(reason)}")
     end
   end
-
-  defp ocr_provider_name(nil), do: ""
-  defp ocr_provider_name(Seath.OCR.Azure), do: "azure"
-  defp ocr_provider_name(Seath.OCR.Ollama), do: "ollama"
-  defp ocr_provider_name(_), do: ""
-
-  defp llm_provider_name(nil), do: ""
-  defp llm_provider_name(Seath.LLM.Ollama), do: "ollama"
-  defp llm_provider_name(_), do: ""
 
   @impl true
   def render(assigns) do
