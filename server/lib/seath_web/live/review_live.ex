@@ -6,22 +6,30 @@ defmodule SeathWeb.ReviewLive do
     documents = Seath.Documents.list_by_status("awaiting_review")
     tags = Seath.Tags.list_tags()
     types = Seath.DocumentTypes.list_types()
+    correspondents = Seath.Correspondents.list_correspondents()
 
     {:ok,
      socket
      |> assign(:documents, documents)
      |> assign(:tags, tags)
      |> assign(:types, types)
+     |> assign(:correspondents, correspondents)
      |> assign(:selected_doc, nil)
+     |> assign(:involved_parties, [])
      |> assign(:selected_ids, MapSet.new())}
   end
 
   @impl true
   def handle_event("select", %{"id" => id}, socket) do
     doc =
-      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type])
+      Seath.Documents.get_document!(id)
+      |> Seath.Repo.preload([:tags, :document_type, :correspondent])
 
-    {:noreply, assign(socket, :selected_doc, doc)}
+    involved_parties = Seath.InvolvedParties.list_parties_by_document(id)
+
+    {:noreply,
+     assign(socket, :selected_doc, doc)
+     |> assign(:involved_parties, involved_parties)}
   end
 
   @impl true
@@ -35,6 +43,7 @@ defmodule SeathWeb.ReviewLive do
      socket
      |> assign(:documents, documents)
      |> assign(:selected_doc, nil)
+     |> assign(:involved_parties, [])
      |> put_flash(:info, "Document approved and archived.")}
   end
 
@@ -49,6 +58,7 @@ defmodule SeathWeb.ReviewLive do
      socket
      |> assign(:documents, documents)
      |> assign(:selected_doc, nil)
+     |> assign(:involved_parties, [])
      |> put_flash(:info, "Document rejected.")}
   end
 
@@ -56,7 +66,7 @@ defmodule SeathWeb.ReviewLive do
   def handle_event("update_title", %{"id" => id, "title" => title}, socket) do
     doc = Seath.Documents.get_document!(id)
     {:ok, updated} = Seath.Documents.update_document(doc, %{title: title})
-    updated = Seath.Repo.preload(updated, [:tags, :document_type])
+    updated = Seath.Repo.preload(updated, [:tags, :document_type, :correspondent])
     {:noreply, assign(socket, :selected_doc, updated)}
   end
 
@@ -69,10 +79,37 @@ defmodule SeathWeb.ReviewLive do
     end
 
     updated =
-      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type])
+      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type, :correspondent])
 
     {:noreply, assign(socket, :selected_doc, updated)}
   end
+
+  @impl true
+  def handle_event("create_tag", %{"id" => id, "name" => name}, socket) when name != "" do
+    doc = Seath.Documents.get_document!(id)
+    name = String.trim(name)
+
+    tag =
+      case Seath.Tags.get_tag_by_name(name) do
+        nil ->
+          {:ok, tag} = Seath.Tags.create_tag(%{name: name})
+          tag
+
+        existing ->
+          existing
+      end
+
+    Seath.Tags.add_tag_to_document(doc, tag)
+    tags = Seath.Tags.list_tags()
+    updated = Seath.Repo.preload(doc, [:tags, :document_type, :correspondent])
+
+    {:noreply,
+     socket
+     |> assign(:selected_doc, updated)
+     |> assign(:tags, tags)}
+  end
+
+  def handle_event("create_tag", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("toggle_select", %{"id" => id}, socket) do
@@ -101,6 +138,7 @@ defmodule SeathWeb.ReviewLive do
      |> assign(:documents, documents)
      |> assign(:selected_ids, MapSet.new())
      |> assign(:selected_doc, nil)
+     |> assign(:involved_parties, [])
      |> put_flash(:info, "#{count} document(s) approved and archived.")}
   end
 
@@ -119,6 +157,7 @@ defmodule SeathWeb.ReviewLive do
      |> assign(:documents, documents)
      |> assign(:selected_ids, MapSet.new())
      |> assign(:selected_doc, nil)
+     |> assign(:involved_parties, [])
      |> put_flash(:info, "#{count} document(s) rejected.")}
   end
 
@@ -127,8 +166,26 @@ defmodule SeathWeb.ReviewLive do
     doc = Seath.Documents.get_document!(id)
     type_id = if type_id == "", do: nil, else: type_id
     {:ok, updated} = Seath.Documents.update_document(doc, %{document_type_id: type_id})
-    updated = Seath.Repo.preload(updated, [:tags, :document_type])
+    updated = Seath.Repo.preload(updated, [:tags, :document_type, :correspondent])
     {:noreply, assign(socket, :selected_doc, updated)}
+  end
+
+  @impl true
+  def handle_event("update_correspondent", %{"id" => id, "correspondent_id" => corr_id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+    corr_id = if corr_id == "", do: nil, else: corr_id
+    {:ok, updated} = Seath.Documents.update_document(doc, %{correspondent_id: corr_id})
+    updated = Seath.Repo.preload(updated, [:tags, :document_type, :correspondent])
+    {:noreply, assign(socket, :selected_doc, updated)}
+  end
+
+  @impl true
+  def handle_event("remove_involved_party", %{"party_id" => party_id}, socket) do
+    party = Seath.InvolvedParties.get_involved_party!(party_id)
+    {:ok, _} = Seath.InvolvedParties.delete_involved_party(party)
+
+    parties = Seath.InvolvedParties.list_parties_by_document(socket.assigns.selected_doc.id)
+    {:noreply, assign(socket, :involved_parties, parties)}
   end
 
   def handle_event("remove_tag", %{"id" => id, "tag_id" => tag_id}, socket) do
@@ -137,7 +194,7 @@ defmodule SeathWeb.ReviewLive do
     Seath.Tags.remove_tag_from_document(doc, tag)
 
     updated =
-      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type])
+      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type, :correspondent])
 
     {:noreply, assign(socket, :selected_doc, updated)}
   end
@@ -282,6 +339,28 @@ defmodule SeathWeb.ReviewLive do
                 </div>
               </div>
 
+              <%!-- Correspondent --%>
+              <div class="mb-6">
+                <label class="block text-sm font-semibold text-base-content mb-1">
+                  Correspondent
+                </label>
+                <form phx-change="update_correspondent" phx-value-id={@selected_doc.id}>
+                  <select
+                    name="correspondent_id"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">None</option>
+                    <option
+                      :for={corr <- @correspondents}
+                      value={corr.id}
+                      selected={@selected_doc.correspondent && @selected_doc.correspondent.id == corr.id}
+                    >
+                      {corr.name}
+                    </option>
+                  </select>
+                </form>
+              </div>
+
               <%!-- Tags --%>
               <div class="mb-6">
                 <label class="block text-sm font-semibold text-base-content mb-2">Tags</label>
@@ -301,12 +380,62 @@ defmodule SeathWeb.ReviewLive do
                     </button>
                   </span>
                 </div>
-                <form phx-change="add_tag" phx-value-id={@selected_doc.id} class="flex gap-2">
-                  <select name="tag_id" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    <option value="">Add tag...</option>
-                    <option :for={tag <- @tags} value={tag.id}>{tag.name}</option>
-                  </select>
-                </form>
+                <div class="flex gap-2">
+                  <form phx-change="add_tag" phx-value-id={@selected_doc.id} class="flex-1">
+                    <select
+                      name="tag_id"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="">Add existing tag...</option>
+                      <option :for={tag <- @tags} value={tag.id}>{tag.name}</option>
+                    </select>
+                  </form>
+                  <form phx-submit="create_tag" phx-value-id={@selected_doc.id} class="flex gap-1">
+                    <input
+                      type="text"
+                      name="name"
+                      placeholder="New tag..."
+                      class="px-3 py-2 border border-gray-300 rounded-lg text-sm w-32"
+                    />
+                    <button
+                      type="submit"
+                      class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                    >
+                      Add
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <%!-- Involved Parties --%>
+              <div class="mb-6">
+                <label class="block text-sm font-semibold text-base-content mb-2">
+                  Involved Parties
+                </label>
+                <div :if={@involved_parties && @involved_parties != []} class="space-y-2">
+                  <div
+                    :for={party <- @involved_parties}
+                    class="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg"
+                  >
+                    <div>
+                      <span class="text-sm font-medium text-base-content">{party.name}</span>
+                      <span class="text-xs text-base-content/70 ml-2">({party.role})</span>
+                    </div>
+                    <button
+                      phx-click="remove_involved_party"
+                      phx-value-party_id={party.id}
+                      class="text-red-500 hover:text-red-700"
+                    >
+                      <.icon name="hero-x-mark" class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <p
+                  :if={!@involved_parties || @involved_parties == []}
+                  class="text-sm text-base-content/70"
+                >
+                  No involved parties extracted
+                </p>
               </div>
 
               <%!-- OCR Text preview --%>
