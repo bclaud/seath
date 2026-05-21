@@ -14,7 +14,12 @@ defmodule SeathWeb.UploadLive do
        max_entries: 10,
        max_file_size: 50_000_000
      )
-      |> assign(:uploaded_docs, [])}
+     |> assign(:uploaded_docs, [])}
+  end
+
+  @impl true
+  def handle_event("validate", _params, socket) do
+    {:noreply, socket}
   end
 
   @impl true
@@ -65,50 +70,48 @@ defmodule SeathWeb.UploadLive do
       <div class="max-w-2xl mx-auto py-12 px-4">
         <h1 class="text-2xl font-bold mb-8">Upload Documents</h1>
 
-        <%!-- Upload zone --%>
-        <div
-          id="upload-zone"
-          phx-drop-target={@uploads.document.ref}
-          phx-hook="UploadZone"
-          class={[
-            "border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer",
-            "hover:border-blue-400 hover:bg-blue-50 transition-colors",
-            length(@uploads.document.entries) > 0 && "border-blue-400 bg-blue-50"
-          ]}
-        >
-          <.live_file_input upload={@uploads.document} />
-          <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-          <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
-          <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
-        </div>
-
-        <%!-- Upload progress --%>
-        <div :for={entry <- @uploads.document.entries} class="mt-4 p-4 bg-white rounded-lg border">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-gray-700">{entry.client_name}</span>
-            <span class="text-sm text-gray-500">{entry.progress}%</span>
+        <form id="upload-form" phx-change="validate" phx-submit="save">
+          <%!-- Upload zone --%>
+          <div
+            id="upload-zone"
+            phx-drop-target={@uploads.document.ref}
+            phx-hook="UploadZone"
+            class={[
+              "border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer",
+              "hover:border-blue-400 hover:bg-blue-50 transition-colors",
+              length(@uploads.document.entries) > 0 && "border-blue-400 bg-blue-50"
+            ]}
+          >
+            <.live_file_input upload={@uploads.document} />
+            <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
+            <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
           </div>
-          <div class="w-full bg-gray-200 rounded-full h-2">
-            <div
-              class="bg-blue-500 h-2 rounded-full transition-all"
-              style={"width: #{entry.progress}%"}
-            >
+
+          <%!-- Upload progress --%>
+          <div :for={entry <- @uploads.document.entries} class="mt-4 p-4 bg-white rounded-lg border">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm font-medium text-gray-700">{entry.client_name}</span>
+              <span class="text-sm text-gray-500">{entry.progress}%</span>
             </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div class="bg-blue-500 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}>
+              </div>
+            </div>
+            <p :if={entry.valid? == false} class="text-sm text-red-500 mt-2">
+              {upload_errors(@uploads.document, entry) |> Enum.map(&to_string/1) |> Enum.join(", ")}
+            </p>
           </div>
-          <p :if={entry.valid? == false} class="text-sm text-red-500 mt-2">
-            {upload_errors(@uploads.document, entry) |> Enum.map(&to_string/1) |> Enum.join(", ")}
-          </p>
-        </div>
 
-        <%!-- Upload button --%>
-        <button
-          :if={length(@uploads.document.entries) > 0}
-          phx-click="save"
-          class="mt-6 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium
-                 hover:bg-blue-700 transition-colors disabled:opacity-50"
-        >
-          Upload {length(@uploads.document.entries)} file(s)
-        </button>
+          <%!-- Upload button --%>
+          <button
+            :if={length(@uploads.document.entries) > 0}
+            type="submit"
+            class="mt-6 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            Upload {length(@uploads.document.entries)} file(s)
+          </button>
+        </form>
 
         <%!-- Uploaded documents --%>
         <div :if={@uploaded_docs != []} class="mt-8">
