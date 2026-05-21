@@ -157,7 +157,7 @@ config :seath, Seath.OCR.Ollama,
 
 config :seath, Seath.LLM.Ollama,
   base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
-  model: System.get_env("OLLAMA_LLM_MODEL", "gemma3:27b")
+  model: System.get_env("OLLAMA_LLM_MODEL", "gemma4")
 
 config :seath, Seath.LLM.OpenAI,
   api_key: System.get_env("OPENAI_API_KEY"),

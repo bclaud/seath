@@ -36,8 +36,8 @@ defmodule Seath.Settings do
           azure_key: nil,
           ollama_base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
           ollama_ocr_model: System.get_env("OLLAMA_OCR_MODEL", "llama3.2-vision"),
-          ollama_llm_model: System.get_env("OLLAMA_LLM_MODEL", "gemma3:27b"),
-          ollama_chat_model: System.get_env("OLLAMA_CHAT_MODEL", "gemma3:27b"),
+          ollama_llm_model: System.get_env("OLLAMA_LLM_MODEL", "gemma4"),
+          ollama_chat_model: System.get_env("OLLAMA_CHAT_MODEL", "gemma4"),
           openai_api_key: nil,
           openai_model: System.get_env("OPENAI_LLM_MODEL", "gpt-4o"),
           openai_base_url: System.get_env("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -192,17 +192,21 @@ defmodule Seath.Settings do
 
   defp maybe_put_ollama(settings) do
     if settings.ollama_base_url do
+      existing = Application.get_env(:seath, Seath.LLM.Ollama, [])
       Application.put_env(:seath, Seath.LLM.Ollama,
-        base_url: settings.ollama_base_url
+        Keyword.merge(existing, base_url: settings.ollama_base_url)
       )
     end
   end
 
   defp maybe_put_openai(settings) do
     if settings.openai_api_key && settings.openai_api_key != "" do
+      existing = Application.get_env(:seath, Seath.LLM.OpenAI, [])
       Application.put_env(:seath, Seath.LLM.OpenAI,
-        api_key: settings.openai_api_key,
-        base_url: settings.openai_base_url || "https://api.openai.com/v1"
+        Keyword.merge(existing,
+          api_key: settings.openai_api_key,
+          base_url: settings.openai_base_url || "https://api.openai.com/v1"
+        )
       )
     end
   end

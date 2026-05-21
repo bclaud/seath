@@ -15,8 +15,8 @@ defmodule SeathWeb.SettingsLive do
      |> assign(:azure_key, s.azure_key || "")
      |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
      |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llama3.2-vision")
-     |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma3:27b")
-     |> assign(:ollama_chat_model, s.ollama_chat_model || "gemma3:27b")
+     |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma4")
+     |> assign(:ollama_chat_model, s.ollama_chat_model || "gemma4")
      |> assign(:openai_api_key, s.openai_api_key || "")
      |> assign(:openai_model, s.openai_model || "gpt-4o")
      |> assign(:openai_base_url, s.openai_base_url || "https://api.openai.com/v1")
@@ -61,8 +61,8 @@ defmodule SeathWeb.SettingsLive do
       azure_key: params["azure_key"] || "",
       ollama_base_url: params["ollama_base_url"] || "http://localhost:11434",
       ollama_ocr_model: params["ollama_ocr_model"] || "llama3.2-vision",
-      ollama_llm_model: params["ollama_llm_model"] || "gemma3:27b",
-      ollama_chat_model: params["ollama_chat_model"] || "gemma3:27b",
+      ollama_llm_model: params["ollama_llm_model"] || "gemma4",
+      ollama_chat_model: params["ollama_chat_model"] || "gemma4",
       openai_api_key: params["openai_api_key"] || "",
       openai_model: params["openai_model"] || "gpt-4o",
       openai_base_url: params["openai_base_url"] || "https://api.openai.com/v1"
@@ -79,8 +79,8 @@ defmodule SeathWeb.SettingsLive do
          |> assign(:azure_key, s.azure_key || "")
          |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
          |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llama3.2-vision")
-         |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma3:27b")
-         |> assign(:ollama_chat_model, s.ollama_chat_model || "gemma3:27b")
+         |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma4")
+         |> assign(:ollama_chat_model, s.ollama_chat_model || "gemma4")
          |> assign(:openai_api_key, s.openai_api_key || "")
          |> assign(:openai_model, s.openai_model || "gpt-4o")
          |> assign(:openai_base_url, s.openai_base_url || "https://api.openai.com/v1")
@@ -243,7 +243,7 @@ defmodule SeathWeb.SettingsLive do
                 <input type="radio" name="llm_provider" value="ollama" checked={@llm_provider == "ollama"} class="text-blue-600" />
                 <div>
                   <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
-                  <p class="text-xs text-base-content/70">Recommended: <strong>gemma3:27b</strong></p>
+                  <p class="text-xs text-base-content/70">Recommended: <strong>gemma4</strong></p>
                 </div>
               </label>
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
@@ -275,7 +275,7 @@ defmodule SeathWeb.SettingsLive do
                 <input type="radio" name="chat_provider" value="ollama" checked={@chat_provider == "ollama"} class="text-blue-600" />
                 <div>
                   <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
-                  <p class="text-xs text-base-content/70">Separate Ollama model for chat. Recommended: <strong>gemma3:27b</strong></p>
+                  <p class="text-xs text-base-content/70">Separate Ollama model for chat. Recommended: <strong>gemma4</strong></p>
                 </div>
               </label>
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
@@ -310,12 +310,12 @@ defmodule SeathWeb.SettingsLive do
                 <div>
                   <label class="block text-sm font-medium text-base-content/90 mb-1">LLM Model</label>
                   <input type="text" name="ollama_llm_model" value={@ollama_llm_model} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono" />
-                  <p class="text-xs text-base-content/70 mt-1">Classification. <strong>gemma3:27b</strong></p>
+                  <p class="text-xs text-base-content/70 mt-1">Classification. <strong>gemma4</strong></p>
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-base-content/90 mb-1">Chat Model</label>
                   <input type="text" name="ollama_chat_model" value={@ollama_chat_model} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono" />
-                  <p class="text-xs text-base-content/70 mt-1">Tool-use. <strong>gemma3:27b</strong></p>
+                  <p class="text-xs text-base-content/70 mt-1">Tool-use. <strong>gemma4</strong></p>
                 </div>
               </div>
 

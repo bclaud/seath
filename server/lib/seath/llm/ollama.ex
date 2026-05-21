@@ -138,8 +138,16 @@ defmodule Seath.LLM.Ollama do
   def embed(text) do
     {base_url, model} = config()
 
+    # Many models (like gemma4) don't support the /api/embed endpoint.
+    # Fall back to llama3.2 which is always available and supports embeddings.
+    embed_model =
+      case model do
+        "gemma4" <> _ -> "llama3.2"
+        _ -> model
+      end
+
     body = %{
-      model: model,
+      model: embed_model,
       input: text
     }
 
