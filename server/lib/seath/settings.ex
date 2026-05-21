@@ -1,9 +1,14 @@
 defmodule Seath.Settings do
   @moduledoc """
-  Persisted application settings (OCR/LLM provider configuration).
+  Persisted application settings (OCR/LLM/Chat provider configuration).
 
   Settings are stored in a single-row table. On startup, if settings exist,
   they are applied to Application.put_env for immediate effect.
+
+  Supports three independent providers:
+    - OCR: extracts text from documents (Azure, Ollama, OpenAI)
+    - LLM: classifies documents and generates embeddings (Ollama, OpenAI)
+    - Chat: powers RAG chat with tool-use (Ollama, OpenAI)
   """
 
   alias Seath.Repo
@@ -26,11 +31,16 @@ defmodule Seath.Settings do
         %Seath.Settings.Setting{
           ocr_provider: "",
           llm_provider: "",
+          chat_provider: "",
           azure_endpoint: nil,
           azure_key: nil,
           ollama_base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
-          ollama_ocr_model: System.get_env("OLLAMA_OCR_MODEL", "llava"),
-          ollama_llm_model: System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+          ollama_ocr_model: System.get_env("OLLAMA_OCR_MODEL", "llama3.2-vision"),
+          ollama_llm_model: System.get_env("OLLAMA_LLM_MODEL", "gemma3:27b"),
+          ollama_chat_model: System.get_env("OLLAMA_CHAT_MODEL", "gemma3:27b"),
+          openai_api_key: nil,
+          openai_model: System.get_env("OPENAI_LLM_MODEL", "gpt-4o"),
+          openai_base_url: System.get_env("OPENAI_BASE_URL", "https://api.openai.com/v1")
         }
 
       settings ->
@@ -79,11 +89,18 @@ defmodule Seath.Settings do
 
   @doc """
   Applies the given settings to Application.put_env for immediate effect.
+
+  Sets three independent providers:
+    - :ocr_provider  → used by Seath.OCR.extract/1
+    - :llm_provider  → used by Seath.LLM.classify/3, Seath.LLM.embed/1
+    - :chat_provider → used by Seath.LLM.chat/2, Seath.LLM.chat_stream/3,
+                       Seath.LLM.chat_with_tools/3
   """
   def apply_to_env(settings) do
     # Clear existing provider configs
     Application.delete_env(:seath, :ocr_provider)
     Application.delete_env(:seath, :llm_provider)
+    Application.delete_env(:seath, :chat_provider)
 
     # Set OCR provider
     case settings.ocr_provider do
@@ -103,11 +120,24 @@ defmodule Seath.Settings do
           model: settings.ollama_ocr_model
         )
 
+      "openai" ->
+        Application.put_env(:seath, :ocr_provider, Seath.LLM.OpenAI)
+
+        Application.put_env(:seath, Seath.LLM.OpenAI,
+          api_key: settings.openai_api_key,
+          base_url: settings.openai_base_url,
+          model: settings.openai_model
+        )
+
       _ ->
         :ok
     end
 
-    # Set LLM provider
+    # Shared Ollama config for providers that use it
+    maybe_put_ollama(settings)
+    maybe_put_openai(settings)
+
+    # Set LLM provider (classification + embeddings)
     case settings.llm_provider do
       "ollama" ->
         Application.put_env(:seath, :llm_provider, Seath.LLM.Ollama)
@@ -117,8 +147,63 @@ defmodule Seath.Settings do
           model: settings.ollama_llm_model
         )
 
+      "openai" ->
+        Application.put_env(:seath, :llm_provider, Seath.LLM.OpenAI)
+
+        Application.put_env(:seath, Seath.LLM.OpenAI,
+          api_key: settings.openai_api_key,
+          base_url: settings.openai_base_url,
+          model: settings.openai_model
+        )
+
       _ ->
         :ok
+    end
+
+    # Set Chat provider (conversation + tool-use) — defaults to LLM provider if not set
+    chat_provider =
+      case settings.chat_provider do
+        "" -> settings.llm_provider
+        p -> p
+      end
+
+    case chat_provider do
+      "ollama" ->
+        Application.put_env(:seath, :chat_provider, Seath.LLM.Ollama)
+
+        Application.put_env(:seath, Seath.LLM.Ollama,
+          base_url: settings.ollama_base_url,
+          model: settings.ollama_chat_model
+        )
+
+      "openai" ->
+        Application.put_env(:seath, :chat_provider, Seath.LLM.OpenAI)
+
+        Application.put_env(:seath, Seath.LLM.OpenAI,
+          api_key: settings.openai_api_key,
+          base_url: settings.openai_base_url,
+          model: settings.openai_model
+        )
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp maybe_put_ollama(settings) do
+    if settings.ollama_base_url do
+      Application.put_env(:seath, Seath.LLM.Ollama,
+        base_url: settings.ollama_base_url
+      )
+    end
+  end
+
+  defp maybe_put_openai(settings) do
+    if settings.openai_api_key && settings.openai_api_key != "" do
+      Application.put_env(:seath, Seath.LLM.OpenAI,
+        api_key: settings.openai_api_key,
+        base_url: settings.openai_base_url || "https://api.openai.com/v1"
+      )
     end
   end
 end

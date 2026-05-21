@@ -124,6 +124,7 @@ ocr_provider =
   case System.get_env("OCR_PROVIDER") do
     "azure" -> Seath.OCR.Azure
     "ollama" -> Seath.OCR.Ollama
+    "openai" -> Seath.LLM.OpenAI
     _ -> nil
   end
 
@@ -134,8 +135,17 @@ llm_provider =
     _ -> nil
   end
 
+# Separate chat provider — defaults to LLM_PROVIDER if not set
+chat_provider =
+  case System.get_env("CHAT_PROVIDER") do
+    "ollama" -> Seath.LLM.Ollama
+    "openai" -> Seath.LLM.OpenAI
+    _ -> llm_provider
+  end
+
 if ocr_provider, do: config(:seath, :ocr_provider, ocr_provider)
 if llm_provider, do: config(:seath, :llm_provider, llm_provider)
+if chat_provider, do: config(:seath, :chat_provider, chat_provider)
 
 config :seath, Seath.OCR.Azure,
   endpoint: System.get_env("AZURE_DI_ENDPOINT"),

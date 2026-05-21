@@ -1,26 +1,39 @@
 defmodule Seath.LLM do
   @moduledoc """
-  LLM context — delegates to the configured LLM provider.
+  LLM context — delegates to the configured LLM provider for classification
+  and to the configured chat provider for conversational responses.
 
-  Configure via `config :seath, :llm_provider, Seath.LLM.Ollama`
-  or set the `LLM_PROVIDER` env var. Available providers:
+  Supports two independent providers:
+    - **LLM provider** (`:llm_provider`): used for classify/3 and embed/1
+    - **Chat provider** (`:chat_provider`): used for chat/2, chat_stream/3,
+      chat_with_tools/3
+
+  Configure via `config :seath` or the Settings UI.
+  The chat provider defaults to the LLM provider if not explicitly set.
+  Available providers:
     - Seath.LLM.Ollama
+    - Seath.LLM.OpenAI
   """
 
   @doc """
-  Returns the configured LLM provider module, or `nil` if none is configured.
+  Returns the configured LLM provider module (for classify/embed), or `nil`.
   """
   def impl do
     Application.get_env(:seath, :llm_provider)
   end
 
   @doc """
+  Returns the configured chat provider module (for chat/stream/tools), or `nil`.
+  Falls back to the LLM provider if no chat-specific provider is configured.
+  """
+  def chat_impl do
+    Application.get_env(:seath, :chat_provider) || impl()
+  end
+
+  @doc """
   Classifies document text using the configured LLM provider.
 
-  ## Options
-    * `:similar_documents` — list of similar archived document maps to inject as context
-    * `:language` — document language (default from config)
-
+  See `c:Seath.LLM.Provider.classify/3` for details.
   Returns `{:error, :not_configured}` if no LLM provider is configured.
   """
   def classify(text, available_tags, available_types, opts \\ []) do
@@ -31,8 +44,9 @@ defmodule Seath.LLM do
   end
 
   @doc """
-  Generates an embedding vector for the given text using the configured LLM provider.
+  Generates an embedding vector using the configured LLM provider.
 
+  See `c:Seath.LLM.Provider.embed/1` for details.
   Returns `{:error, :not_configured}` if no LLM provider is configured.
   """
   def embed(text) do
@@ -43,47 +57,47 @@ defmodule Seath.LLM do
   end
 
   @doc """
-  Generates a conversational response for the given messages.
+  Generates a conversational response using the configured chat provider.
 
-  See `Seath.LLM.Provider.chat/2` for message format details.
-  Returns `{:error, :not_configured}` if no LLM provider is configured.
+  See `c:Seath.LLM.Provider.chat/2` for message format details.
+  Returns `{:error, :not_configured}` if no chat provider is available.
   """
   def chat(messages, opts \\ []) do
-    case impl() do
+    case chat_impl() do
       nil -> {:error, :not_configured}
       provider -> provider.chat(messages, opts)
     end
   end
 
   @doc """
-  Streams a conversational response token-by-token via the configured LLM provider.
+  Streams a conversational response token-by-token via the chat provider.
 
-  Sends `{:token, token_string}` messages to the `stream_to` pid.
-  See `Seath.LLM.Provider.chat_stream/3` for details.
-  Returns `{:error, :not_configured}` if no LLM provider is configured.
+  Sends `{:stream_token, token_string}` messages to the `stream_to` pid.
+  See `c:Seath.LLM.Provider.chat_stream/3` for details.
+  Returns `{:error, :not_configured}` if no chat provider is available.
   """
   def chat_stream(messages, opts \\ [], stream_to) do
-    case impl() do
+    case chat_impl() do
       nil -> {:error, :not_configured}
       provider -> provider.chat_stream(messages, opts, stream_to)
     end
   end
 
   @doc """
-  Performs vision-based OCR on image data using the configured LLM provider.
+  Generates a tool-assisted conversational response via the chat provider.
 
-  Takes raw image bytes and returns extracted text.
-  Returns `{:error, :not_configured}` if no LLM provider is configured
-  or if the provider does not support `ocr_vision/2`.
+  See `c:Seath.LLM.Provider.chat_with_tools/3` for details.
+  Returns `{:error, :not_configured}` if no chat provider is available,
+  or `{:error, :not_supported}` if the provider doesn't implement it.
   """
-  def ocr_vision(image_data, opts \\ []) do
-    case impl() do
+  def chat_with_tools(messages, tools, opts \\ []) do
+    case chat_impl() do
       nil ->
         {:error, :not_configured}
 
       provider ->
-        if function_exported?(provider, :ocr_vision, 2) do
-          provider.ocr_vision(image_data, opts)
+        if function_exported?(provider, :chat_with_tools, 3) do
+          provider.chat_with_tools(messages, tools, opts)
         else
           {:error, :not_supported}
         end
@@ -91,22 +105,20 @@ defmodule Seath.LLM do
   end
 
   @doc """
-  Generates a conversational response with tool/function-calling support.
+  Performs vision-based OCR on image data using the configured chat provider.
 
-  Takes messages and tool definitions. Returns either a plain text response
-  or a list of tool calls for the LLM to request execution of.
-
-  Falls back to `{:error, :not_supported}` if the provider doesn't implement
-  `chat_with_tools/3`.
+  See `c:Seath.LLM.Provider.ocr_vision/2` for details.
+  Returns `{:error, :not_configured}` if no chat provider is available
+  or the provider does not support `ocr_vision/2`.
   """
-  def chat_with_tools(messages, tools, opts \\ []) do
-    case impl() do
+  def ocr_vision(image_data, opts \\ []) do
+    case chat_impl() do
       nil ->
         {:error, :not_configured}
 
       provider ->
-        if function_exported?(provider, :chat_with_tools, 3) do
-          provider.chat_with_tools(messages, tools, opts)
+        if function_exported?(provider, :ocr_vision, 2) do
+          provider.ocr_vision(image_data, opts)
         else
           {:error, :not_supported}
         end
