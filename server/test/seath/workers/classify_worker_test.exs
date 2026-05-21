@@ -56,7 +56,8 @@ defmodule Seath.Workers.ClassifyWorkerTest do
       Oban.drain_queue(queue: :classify)
 
       updated = Documents.get_document!(document.id)
-      assert updated.status == "pending"
+      assert updated.status == "error"
+      assert updated.error_message != nil
     end
 
     test "returns error when document has empty OCR text", %{document: document} do
@@ -68,7 +69,8 @@ defmodule Seath.Workers.ClassifyWorkerTest do
       Oban.drain_queue(queue: :classify)
 
       updated = Documents.get_document!(document.id)
-      assert updated.status == "pending"
+      assert updated.status == "error"
+      assert updated.error_message != nil
     end
 
     test "creates tags if they don't exist", %{document: document} do

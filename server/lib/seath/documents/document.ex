@@ -16,7 +16,7 @@ defmodule Seath.Documents.Document do
           updated_at: DateTime.t()
         }
 
-  @valid_statuses ~w(pending processing awaiting_review archived rejected)
+  @valid_statuses ~w(pending processing awaiting_review archived rejected error)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -28,6 +28,7 @@ defmodule Seath.Documents.Document do
     field :file_size, :integer
     field :ocr_text, :string
     field :confidence, :float
+    field :error_message, :string
     field :status, :string, default: "pending"
     field :archived_at, :utc_datetime
 
@@ -51,6 +52,7 @@ defmodule Seath.Documents.Document do
       :file_size,
       :ocr_text,
       :confidence,
+      :error_message,
       :status,
       :archived_at,
       :document_type_id,
@@ -77,10 +79,14 @@ defmodule Seath.Documents.Document do
       when is_binary(current_status) and is_binary(new_status) do
     case {current_status, new_status} do
       {"pending", "processing"} -> :ok
+      {"pending", "error"} -> :ok
       {"processing", "awaiting_review"} -> :ok
+      {"processing", "error"} -> :ok
       {"awaiting_review", "archived"} -> :ok
       {"awaiting_review", "rejected"} -> :ok
+      {"awaiting_review", "error"} -> :ok
       {"rejected", "pending"} -> :ok
+      {"error", "pending"} -> :ok
       _ -> {:error, "invalid transition from #{current_status} to #{new_status}"}
     end
   end

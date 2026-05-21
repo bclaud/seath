@@ -9,6 +9,7 @@ defmodule SeathWeb.UploadLive do
 
     pending = Seath.Documents.list_by_status("pending")
     processing = Seath.Documents.list_by_status("processing")
+    errored = Seath.Documents.list_by_status("error")
     ocr_configured? = not is_nil(Seath.OCR.impl())
     llm_configured? = not is_nil(Seath.LLM.impl())
 
@@ -19,7 +20,7 @@ defmodule SeathWeb.UploadLive do
        max_entries: 10,
        max_file_size: 50_000_000
      )
-     |> assign(:in_flight, pending ++ processing)
+     |> assign(:in_flight, pending ++ processing ++ errored)
      |> assign(:ocr_configured, ocr_configured?)
      |> assign(:llm_configured, llm_configured?)}
   end
@@ -37,7 +38,6 @@ defmodule SeathWeb.UploadLive do
       consume_uploaded_entries(socket, :document, fn %{path: path}, entry ->
         case Seath.Documents.ingest(path, entry.client_name) do
           {:ok, doc} ->
-            # Kick off the pipeline immediately
             Seath.Workers.OCRWorker.new(%{"document_id" => doc.id}) |> Oban.insert()
             {:ok, doc}
 
@@ -60,12 +60,35 @@ defmodule SeathWeb.UploadLive do
   end
 
   @impl true
+  def handle_event("retry", %{"id" => id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+    {:ok, _retried} = Seath.Documents.retry(doc)
+
+    # Re-enqueue the appropriate worker based on the document's state
+    Seath.Workers.OCRWorker.new(%{"document_id" => doc.id}) |> Oban.insert()
+
+    # Update in_flight list
+    in_flight =
+      Enum.map(socket.assigns.in_flight, fn
+        %{id: d_id} = d when d_id == id -> %{d | status: "pending", error_message: nil}
+        other -> other
+      end)
+
+    Phoenix.PubSub.broadcast(
+      Seath.PubSub,
+      "documents",
+      {:document_updated, %{id: doc.id, status: "pending"}}
+    )
+
+    {:noreply, assign(socket, :in_flight, in_flight) |> put_flash(:info, "Document queued for retry")}
+  end
+
+  @impl true
   def handle_info({:document_updated, updated}, socket) do
     in_flight =
       Enum.map(socket.assigns.in_flight, fn
         %{id: id} = doc when id == updated.id ->
           %{doc | status: to_string(updated.status)}
-
         other ->
           other
       end)
@@ -80,6 +103,22 @@ defmodule SeathWeb.UploadLive do
       <div class="max-w-4xl mx-auto py-8 px-4">
         <h1 class="text-2xl font-bold mb-2">Upload Documents</h1>
         <p class="text-gray-500 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
+
+        <%!-- Config warnings --%>
+        <div :if={!@ocr_configured} class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
+          <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-yellow-600 shrink-0" />
+          <p class="text-sm text-yellow-800">
+            No OCR provider configured.
+            <a href="/settings" class="underline font-medium hover:text-yellow-900">Go to Settings</a> to enable document processing.
+          </p>
+        </div>
+        <div :if={!@llm_configured} class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
+          <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-yellow-600 shrink-0" />
+          <p class="text-sm text-yellow-800">
+            No LLM provider configured.
+            <a href="/settings" class="underline font-medium hover:text-yellow-900">Go to Settings</a> to enable classification and chat.
+          </p>
+        </div>
 
         <form id="upload-form" phx-change="validate" phx-submit="save">
           <div
@@ -123,24 +162,40 @@ defmodule SeathWeb.UploadLive do
 
         <%!-- Pipeline status --%>
         <div :if={@in_flight != []} class="mt-8">
-          <h2 class="text-lg font-semibold mb-4">Pipeline Status</h2>
+          <h2 class="text-lg font-semibold mb-2">Pipeline Status</h2>
           <p class="text-sm text-gray-500 mb-4">
-            {@in_flight |> Enum.filter(& &1.status in ~w(pending processing)) |> length()} document(s) in pipeline
+            <span class="text-yellow-600">{count_by_status(@in_flight, "pending")}</span> pending ·
+            <span class="text-blue-600">{count_by_status(@in_flight, "processing")}</span> processing ·
+            <span class="text-red-600">{count_by_status(@in_flight, "error")}</span> failed
           </p>
           <div class="space-y-3">
-            <div
-              :for={doc <- @in_flight}
-              class="p-4 bg-white rounded-lg border"
-            >
+            <div :for={doc <- @in_flight} class={[
+              "p-4 bg-white rounded-lg border",
+              doc.status == "error" && "border-red-200",
+              doc.status == "pending" && "border-yellow-200",
+              doc.status == "processing" && "border-blue-200"
+            ]}>
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 min-w-0">
-                  <.icon name={"hero-document-text"} class="w-5 h-5 shrink-0 text-gray-400" />
+                  <.icon name="hero-document-text" class="w-5 h-5 shrink-0 text-gray-400" />
                   <span class="text-sm font-medium text-gray-900 truncate">{doc.title || doc.file_name}</span>
                 </div>
                 <.status_badge status={doc.status} />
               </div>
-              <div class="mt-3">
+
+              <div :if={doc.status != "error"} class="mt-3">
                 <.pipeline_bar status={doc.status} />
+              </div>
+
+              <div :if={doc.status == "error"} class="mt-3 p-3 bg-red-50 rounded-lg border border-red-100">
+                <p class="text-xs text-red-700 font-mono whitespace-pre-wrap">{doc.error_message}</p>
+                <button
+                  phx-click="retry"
+                  phx-value-id={doc.id}
+                  class="mt-2 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg font-medium hover:bg-red-700 transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             </div>
           </div>
@@ -148,6 +203,10 @@ defmodule SeathWeb.UploadLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp count_by_status(docs, status) do
+    Enum.count(docs, &(&1.status == status))
   end
 
   attr :status, :string, required: true
@@ -160,7 +219,8 @@ defmodule SeathWeb.UploadLive do
       @status == "processing" && "bg-blue-50 text-blue-700 border border-blue-200 animate-pulse",
       @status == "awaiting_review" && "bg-purple-50 text-purple-700 border border-purple-200",
       @status == "archived" && "bg-green-50 text-green-700 border border-green-200",
-      @status == "rejected" && "bg-red-50 text-red-700 border border-red-200"
+      @status == "rejected" && "bg-red-50 text-red-700 border border-red-200",
+      @status == "error" && "bg-red-50 text-red-700 border border-red-200"
     ]}>
       <span :if={@status == "processing"} class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
       {@status}
@@ -201,6 +261,5 @@ defmodule SeathWeb.UploadLive do
   defp status_rank("processing"), do: 1
   defp status_rank("awaiting_review"), do: 2
   defp status_rank("archived"), do: 3
-  defp status_rank("rejected"), do: 4
   defp status_rank(_), do: 0
 end

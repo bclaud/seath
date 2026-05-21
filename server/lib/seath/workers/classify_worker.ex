@@ -4,12 +4,14 @@ defmodule Seath.Workers.ClassifyWorker do
 
   Fetches the document, validates OCR text is present, runs classification,
   applies tags/document type, and transitions the document to awaiting_review.
+  On failure, marks the document as error with a descriptive message.
   """
   use Oban.Worker, queue: :classify, max_attempts: 3
 
   alias Seath.Documents
   alias Seath.Tags
   alias Seath.DocumentTypes
+  require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"document_id" => id}}) do
@@ -26,6 +28,37 @@ defmodule Seath.Workers.ClassifyWorker do
       )
 
       :ok
+    else
+      {:error, :not_configured} ->
+        msg = "No LLM provider configured. Go to Settings to configure one."
+        Logger.error(msg)
+        mark_error(id, msg)
+        {:discard, :not_configured}
+
+      {:error, :connection_refused} ->
+        msg = "LLM provider unreachable. Check that Ollama is running."
+        Logger.error(msg)
+        mark_error(id, msg)
+        {:discard, :connection_refused}
+
+      {:error, :no_ocr_text} ->
+        msg = "Document has no OCR text. OCR may have failed."
+        Logger.error(msg)
+        mark_error(id, msg)
+        {:discard, :no_ocr_text}
+
+      {:error, reason} ->
+        msg = "Classification error: #{inspect(reason)}"
+        Logger.error(msg)
+        mark_error(id, msg)
+        {:error, reason}
+    end
+  end
+
+  defp mark_error(document_id, message) do
+    case Documents.get_document(document_id) do
+      nil -> :ok
+      doc -> Documents.mark_as_error(doc, message)
     end
   end
 
@@ -45,11 +78,9 @@ defmodule Seath.Workers.ClassifyWorker do
   end
 
   defp apply_classification(doc, result) do
-    # Update title and confidence
     {:ok, doc} =
       Documents.update_document(doc, %{title: result.title, confidence: result.confidence})
 
-    # Add proposed tags
     Enum.each(result.tags, fn tag_name ->
       case Tags.get_tag_by_name(tag_name) do
         nil ->
@@ -61,13 +92,10 @@ defmodule Seath.Workers.ClassifyWorker do
       end
     end)
 
-    # Set document type if matched
     doc =
       if result.document_type do
         case DocumentTypes.get_type_by_name(result.document_type) do
-          nil ->
-            doc
-
+          nil -> doc
           type ->
             {:ok, updated} = Documents.update_document(doc, %{document_type_id: type.id})
             updated
@@ -76,7 +104,6 @@ defmodule Seath.Workers.ClassifyWorker do
         doc
       end
 
-    # Transition to awaiting_review
     Documents.transition_status(doc, "awaiting_review")
   end
 end

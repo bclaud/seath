@@ -116,6 +116,25 @@ defmodule Seath.Documents do
   end
 
   @doc """
+  Marks a document as errored with a descriptive message.
+  The document can be retried later (error -> pending).
+  """
+  def mark_as_error(%Document{} = document, message) do
+    document
+    |> Document.changeset(%{status: "error", error_message: message})
+    |> Repo.update()
+  end
+
+  @doc """
+  Resets an errored document back to pending for retry.
+  """
+  def retry(%Document{} = document) do
+    document
+    |> Document.changeset(%{status: "pending", error_message: nil})
+    |> Repo.update()
+  end
+
+  @doc """
   Searches documents by full-text search over title, OCR text, and file name.
 
   Uses PostgreSQL tsvector/tsquery for ranked full-text search.

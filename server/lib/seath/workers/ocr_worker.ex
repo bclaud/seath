@@ -3,6 +3,7 @@ defmodule Seath.Workers.OCRWorker do
   Oban worker that performs OCR on a document.
 
   Fetches the document, runs OCR extraction, and stores the result.
+  On failure, marks the document as error with a descriptive message.
   """
   use Oban.Worker, queue: :ocr, max_attempts: 3
 
@@ -24,17 +25,35 @@ defmodule Seath.Workers.OCRWorker do
       :ok
     else
       {:error, :not_configured} ->
-        Logger.error("""
-        No OCR provider configured.
-
-        Set OCR_PROVIDER env var to one of:
-          - "azure"  (requires AZURE_DI_ENDPOINT and AZURE_DI_KEY)
-          - "ollama" (requires OLLAMA_BASE_URL, default: http://localhost:11434)
-        """)
+        msg = "No OCR provider configured. Go to Settings to configure one."
+        Logger.error(msg)
+        mark_error(id, msg)
         {:discard, :not_configured}
 
+      {:error, :connection_refused} ->
+        msg = "OCR provider unreachable. Check that Ollama is running."
+        Logger.error(msg)
+        mark_error(id, msg)
+        {:discard, :connection_refused}
+
+      {:error, {:unexpected_response, 500, body}} ->
+        msg = "OCR failed: #{inspect(body)}"
+        Logger.error(msg)
+        mark_error(id, msg)
+        {:discard, :ocr_failed}
+
       {:error, reason} ->
+        msg = "OCR error: #{inspect(reason)}"
+        Logger.error(msg)
+        mark_error(id, msg)
         {:error, reason}
+    end
+  end
+
+  defp mark_error(document_id, message) do
+    case Documents.get_document(document_id) do
+      nil -> :ok
+      doc -> Documents.mark_as_error(doc, message)
     end
   end
 
