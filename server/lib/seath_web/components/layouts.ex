@@ -43,7 +43,7 @@ defmodule SeathWeb.Layouts do
       <aside class="w-64 bg-gray-900 text-white flex flex-col shrink-0">
         <div class="p-6 border-b border-gray-700">
           <h1 class="text-xl font-bold tracking-tight">Seath</h1>
-          <p class="text-sm text-gray-600 mt-1">Document Manager</p>
+          <p class="text-sm text-white/70 mt-1">Document Manager</p>
         </div>
 
         <nav class="flex-1 p-4 space-y-1">
@@ -175,7 +175,7 @@ defmodule SeathWeb.Layouts do
       href={@navigate}
       class={[
         "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-        if(@active, do: "bg-gray-700 text-white", else: "text-gray-300 hover:bg-gray-800 hover:text-white")
+        if(@active, do: "bg-gray-700 text-white", else: "text-white/40 hover:bg-gray-800 hover:text-white")
       ]}
     >
       <.icon name={@icon} class="w-5 h-5 shrink-0" />

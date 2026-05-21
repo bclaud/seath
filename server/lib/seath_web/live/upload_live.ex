@@ -101,8 +101,8 @@ defmodule SeathWeb.UploadLive do
     ~H"""
     <Layouts.app flash={@flash} current_page={:upload}>
       <div class="max-w-4xl mx-auto py-8 px-4">
-        <h1 class="text-2xl font-bold text-gray-900 mb-2">Upload Documents</h1>
-        <p class="text-gray-800 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
+        <h1 class="text-2xl font-bold text-base-content mb-2">Upload Documents</h1>
+        <p class="text-base-content/90 mb-8">Files are automatically OCR'd, classified, and sent to review</p>
         <%!-- Config warnings --%>
 
         <%!-- Config warnings --%>
@@ -133,15 +133,15 @@ defmodule SeathWeb.UploadLive do
             ]}
           >
             <.live_file_input upload={@uploads.document} />
-            <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-800 mb-4" />
-            <p class="text-gray-800 mb-2">Drag and drop files here, or click to browse</p>
-            <p class="text-sm text-gray-800">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
+            <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-base-content/90 mb-4" />
+            <p class="text-base-content/90 mb-2">Drag and drop files here, or click to browse</p>
+            <p class="text-sm text-base-content/90">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
           </div>
 
           <div :for={entry <- @uploads.document.entries} class="mt-4 p-4 bg-white rounded-lg border">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-sm font-medium text-gray-700">{entry.client_name}</span>
-              <span class="text-sm text-gray-800">{entry.progress}%</span>
+              <span class="text-sm font-medium text-base-content/80">{entry.client_name}</span>
+              <span class="text-sm text-base-content/90">{entry.progress}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2">
               <div class="bg-blue-500 h-2 rounded-full transition-all" style={"width: #{entry.progress}%"}>
@@ -164,7 +164,7 @@ defmodule SeathWeb.UploadLive do
         <%!-- Pipeline status --%>
         <div :if={@in_flight != []} class="mt-8">
           <h2 class="text-lg font-semibold mb-2">Pipeline Status</h2>
-          <p class="text-sm text-gray-800 mb-4">
+          <p class="text-sm text-base-content/90 mb-4">
             <span class="text-yellow-600">{count_by_status(@in_flight, "pending")}</span> pending ·
             <span class="text-blue-600">{count_by_status(@in_flight, "processing")}</span> processing ·
             <span class="text-red-600">{count_by_status(@in_flight, "error")}</span> failed
@@ -178,8 +178,8 @@ defmodule SeathWeb.UploadLive do
             ]}>
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 min-w-0">
-                  <.icon name="hero-document-text" class="w-5 h-5 shrink-0 text-gray-800" />
-                  <span class="text-sm font-medium text-gray-900 truncate">{doc.title || doc.file_name}</span>
+                  <.icon name="hero-document-text" class="w-5 h-5 shrink-0 text-base-content/90" />
+                  <span class="text-sm font-medium text-base-content truncate">{doc.title || doc.file_name}</span>
                 </div>
                 <.status_badge status={doc.status} />
               </div>
@@ -256,7 +256,7 @@ defmodule SeathWeb.UploadLive do
 
   defp step_text(idx, rank) when idx < rank, do: "text-green-600"
   defp step_text(idx, rank) when idx == rank, do: "text-blue-600 font-semibold"
-  defp step_text(_idx, _rank), do: "text-gray-800"
+  defp step_text(_idx, _rank), do: "text-base-content/90"
 
   defp status_rank("pending"), do: 0
   defp status_rank("processing"), do: 1

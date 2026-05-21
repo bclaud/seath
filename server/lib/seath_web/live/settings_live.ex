@@ -125,8 +125,8 @@ defmodule SeathWeb.SettingsLive do
     ~H"""
     <Layouts.app flash={@flash} current_page={:settings}>
       <div class="max-w-3xl mx-auto py-8 px-4">
-        <h1 class="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p class="text-gray-600 mb-8">Configure AI providers for OCR and document classification</p>
+        <h1 class="text-2xl font-bold text-base-content mb-2">Settings</h1>
+        <p class="text-base-content/70 mb-8">Configure AI providers for OCR and document classification</p>
 
         <%!-- Config source banner --%>
         <div :if={@has_db_settings} class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -146,8 +146,8 @@ defmodule SeathWeb.SettingsLive do
         <form phx-change="update" phx-submit="save" class="space-y-8">
           <%!-- OCR Provider --%>
           <div class="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-3">OCR Provider</h2>
-            <p class="text-sm text-gray-600 mb-4">
+            <h2 class="text-lg font-semibold text-base-content mb-3">OCR Provider</h2>
+            <p class="text-sm text-base-content/70 mb-4">
               OCR extracts text from uploaded documents (PDFs, images). Required for classification and search.
             </p>
 
@@ -155,62 +155,62 @@ defmodule SeathWeb.SettingsLive do
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
                 <input type="radio" name="ocr_provider" value="" checked={@ocr_provider == ""} class="text-blue-600" />
                 <div>
-                  <p class="text-sm font-semibold text-gray-900">None</p>
-                  <p class="text-xs text-gray-600">Documents will not be OCR'd</p>
+                  <p class="text-sm font-semibold text-base-content">None</p>
+                  <p class="text-xs text-base-content/70">Documents will not be OCR'd</p>
                 </div>
               </label>
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
                 <input type="radio" name="ocr_provider" value="ollama" checked={@ocr_provider == "ollama"} class="text-blue-600" />
                 <div>
-                  <p class="text-sm font-semibold text-gray-900">Ollama &mdash; Local</p>
-                  <p class="text-xs text-gray-600">Self-hosted vision model. You need a model like <strong>llava</strong> or <strong>llama3.2-vision</strong>.</p>
+                  <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
+                  <p class="text-xs text-base-content/70">Self-hosted vision model. You need a model like <strong>llava</strong> or <strong>llama3.2-vision</strong>.</p>
                 </div>
               </label>
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
                 <input type="radio" name="ocr_provider" value="azure" checked={@ocr_provider == "azure"} class="text-blue-600" />
                 <div>
-                  <p class="text-sm font-semibold text-gray-900">Azure Document Intelligence &mdash; Cloud</p>
-                  <p class="text-xs text-gray-600">Microsoft's cloud OCR service. Requires an Azure subscription.</p>
+                  <p class="text-sm font-semibold text-base-content">Azure Document Intelligence &mdash; Cloud</p>
+                  <p class="text-xs text-base-content/70">Microsoft's cloud OCR service. Requires an Azure subscription.</p>
                 </div>
               </label>
             </div>
 
             <%!-- Azure config --%>
             <div :if={@ocr_provider == "azure"} class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
-              <h3 class="text-sm font-semibold text-gray-900">Azure Configuration</h3>
+              <h3 class="text-sm font-semibold text-base-content">Azure Configuration</h3>
               <div>
-                <label class="block text-sm font-medium text-gray-800 mb-1">Endpoint URL</label>
+                <label class="block text-sm font-medium text-base-content/90 mb-1">Endpoint URL</label>
                 <input type="text" name="azure_endpoint" value={@azure_endpoint}
                   placeholder="https://your-resource.cognitiveservices.azure.com"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-800 mb-1">API Key</label>
+                <label class="block text-sm font-medium text-base-content/90 mb-1">API Key</label>
                 <input type="password" name="azure_key" value={@azure_key}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content" />
               </div>
             </div>
           </div>
 
           <%!-- LLM Provider --%>
           <div class="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-3">Classification & Chat Provider</h2>
-            <p class="text-sm text-gray-600 mb-4">
+            <h2 class="text-lg font-semibold text-base-content mb-3">Classification & Chat Provider</h2>
+            <p class="text-sm text-base-content/70 mb-4">
               Used to classify documents (auto-tagging), generate embeddings for search, and power the RAG chat.
             </p>
             <div class="space-y-3">
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
                 <input type="radio" name="llm_provider" value="" checked={@llm_provider == ""} class="text-blue-600" />
                 <div>
-                  <p class="text-sm font-semibold text-gray-900">None</p>
-                  <p class="text-xs text-gray-600">Documents will not be classified; chat will be unavailable</p>
+                  <p class="text-sm font-semibold text-base-content">None</p>
+                  <p class="text-xs text-base-content/70">Documents will not be classified; chat will be unavailable</p>
                 </div>
               </label>
               <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 cursor-pointer hover:bg-gray-50 transition-colors">
                 <input type="radio" name="llm_provider" value="ollama" checked={@llm_provider == "ollama"} class="text-blue-600" />
                 <div>
-                  <p class="text-sm font-semibold text-gray-900">Ollama &mdash; Local</p>
-                  <p class="text-xs text-gray-600">
+                  <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
+                  <p class="text-xs text-base-content/70">
                     Models: <strong>llama3.2</strong> (fast), <strong>llama3.1</strong> (quality), <strong>mistral</strong> (balance)
                   </p>
                 </div>
@@ -220,30 +220,30 @@ defmodule SeathWeb.SettingsLive do
 
           <%!-- Ollama connection & models --%>
           <div class="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-3">Ollama Configuration</h2>
-            <p class="text-sm text-gray-600 mb-4">
+            <h2 class="text-lg font-semibold text-base-content mb-3">Ollama Configuration</h2>
+            <p class="text-sm text-base-content/70 mb-4">
               Configure Ollama if you selected it above. Click <strong>Test Connection</strong> to verify.
             </p>
 
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-medium text-gray-800 mb-1">Server URL</label>
+                <label class="block text-sm font-medium text-base-content/90 mb-1">Server URL</label>
                 <input type="text" name="ollama_base_url" value={@ollama_base_url}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content" />
               </div>
 
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-800 mb-1">OCR Model</label>
+                  <label class="block text-sm font-medium text-base-content/90 mb-1">OCR Model</label>
                   <input type="text" name="ollama_ocr_model" value={@ollama_ocr_model}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono" />
-                  <p class="text-xs text-gray-600 mt-1">Vision model. Suggestions: <strong>llava</strong>, <strong>llama3.2-vision</strong></p>
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono" />
+                  <p class="text-xs text-base-content/70 mt-1">Vision model. Suggestions: <strong>llava</strong>, <strong>llama3.2-vision</strong></p>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-gray-800 mb-1">LLM Model</label>
+                  <label class="block text-sm font-medium text-base-content/90 mb-1">LLM Model</label>
                   <input type="text" name="ollama_llm_model" value={@ollama_llm_model}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono" />
-                  <p class="text-xs text-gray-600 mt-1">For classification + chat. Suggestions: <strong>llama3.2</strong>, <strong>llama3.1</strong></p>
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono" />
+                  <p class="text-xs text-base-content/70 mt-1">For classification + chat. Suggestions: <strong>llama3.2</strong>, <strong>llama3.1</strong></p>
                 </div>
               </div>
 
@@ -286,8 +286,8 @@ defmodule SeathWeb.SettingsLive do
                   </div>
                 </div>
 
-                <p class="text-xs text-gray-600 mt-3">
-                  Missing models? Run <code class="bg-gray-200 text-gray-800 px-1 rounded">ollama pull &lt;model_name&gt;</code> in your terminal.
+                <p class="text-xs text-base-content/70 mt-3">
+                  Missing models? Run <code class="bg-gray-200 text-base-content/90 px-1 rounded">ollama pull &lt;model_name&gt;</code> in your terminal.
                   Models are several GB each and must be downloaded once.
                 </p>
               </div>

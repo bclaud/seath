@@ -17,4 +17,19 @@ defmodule Seath.LLM.Mock do
 
   @impl true
   def embed(_text), do: {:ok, Enum.map(1..1536, fn _ -> :rand.uniform() - 0.5 end)}
+
+  @impl true
+  def chat(_messages, _opts) do
+    {:ok, "This is a mock chat response. I don't have access to your documents in mock mode."}
+  end
+
+  @impl true
+  def chat_stream(_messages, opts, stream_to) do
+    # Simulate streaming by sending the full response as a single stream token
+    response =
+      Keyword.get(opts, :response, "This is a mock streaming response.")
+
+    send(stream_to, {:stream_token, response})
+    {:ok, response}
+  end
 end

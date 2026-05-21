@@ -18,4 +18,29 @@ defmodule Seath.LLMTest do
       assert result.confidence == 0.5
     end
   end
+
+  describe "chat/2" do
+    test "returns a conversational response from the configured provider" do
+      assert {:ok, response} = LLM.chat([%{role: "user", content: "Hello"}])
+      assert is_binary(response)
+      assert response != ""
+    end
+
+    test "accepts system prompt option" do
+      messages = [%{role: "user", content: "What documents do I have?"}]
+      assert {:ok, _response} = LLM.chat(messages, system: "You are a helpful assistant.")
+    end
+  end
+
+  describe "chat_stream/3" do
+    test "streams tokens to the given pid" do
+      test_pid = self()
+
+      assert {:ok, response} =
+               LLM.chat_stream([%{role: "user", content: "Hello"}], [], test_pid)
+
+      assert is_binary(response)
+      assert_received {:stream_token, _token}
+    end
+  end
 end

@@ -2,24 +2,32 @@ defmodule Seath.LLM.Ollama do
   @moduledoc """
   Ollama LLM provider.
 
-  Uses an Ollama chat model (default: llama3.2) to classify document text
-  and return structured metadata (title, document_type, tags, confidence).
+  Uses an Ollama chat model (default: llama3.2) to classify document text,
+  generate embeddings, and provide conversational chat responses.
   Requires a running Ollama instance.
   Configure via `OLLAMA_BASE_URL` and `OLLAMA_LLM_MODEL` environment
   variables or equivalent config entries.
   """
   @behaviour Seath.LLM.Provider
 
-  @impl true
-  def classify(text, available_tags, available_types) do
-    config = Application.get_env(:seath, __MODULE__, [])
-
+  @doc false
+  def config do
     base_url =
-      Keyword.get(config, :base_url) ||
+      Application.get_env(:seath, __MODULE__, [])
+      |> Keyword.get(:base_url) ||
         System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
 
-    model = Keyword.get(config, :model) || System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+    model =
+      Application.get_env(:seath, __MODULE__, [])
+      |> Keyword.get(:model) ||
+        System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
 
+    {base_url, model}
+  end
+
+  @impl true
+  def classify(text, available_tags, available_types) do
+    {base_url, model} = config()
     do_classify(text, available_tags, available_types, base_url, model)
   end
 
@@ -49,7 +57,7 @@ defmodule Seath.LLM.Ollama do
 
     case Req.post("#{base_url}/api/chat", json: body) do
       {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
-        parse_response(content)
+        parse_classification(content)
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:unexpected_response, status, body}}
@@ -64,13 +72,7 @@ defmodule Seath.LLM.Ollama do
 
   @impl true
   def embed(text) do
-    config = Application.get_env(:seath, __MODULE__, [])
-
-    base_url =
-      Keyword.get(config, :base_url) ||
-        System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
-
-    model = Keyword.get(config, :model) || System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+    {base_url, model} = config()
 
     body = %{
       model: model,
@@ -92,7 +94,96 @@ defmodule Seath.LLM.Ollama do
     end
   end
 
-  defp parse_response(content) do
+  @impl true
+  def chat(messages, opts) do
+    {base_url, model} = config()
+    system_prompt = Keyword.get(opts, :system)
+    messages = maybe_prepend_system(messages, system_prompt)
+
+    body = %{
+      model: model,
+      stream: false,
+      messages: messages
+    }
+
+    case Req.post("#{base_url}/api/chat", json: body) do
+      {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
+        {:ok, content}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:unexpected_response, status, body}}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, :connection_refused}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @impl true
+  def chat_stream(messages, opts, stream_to) do
+    {base_url, model} = config()
+    system_prompt = Keyword.get(opts, :system)
+    messages = maybe_prepend_system(messages, system_prompt)
+
+    body = %{model: model, stream: true, messages: messages}
+
+    case Req.post("#{base_url}/api/chat", json: body, into: :self) do
+      {:ok, %{status: 200} = resp} ->
+        full_response = stream_ndjson(resp.body, stream_to)
+        {:ok, full_response}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:unexpected_response, status, body}}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, :connection_refused}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp maybe_prepend_system(messages, nil), do: messages
+  defp maybe_prepend_system(messages, prompt), do: [%{role: "system", content: prompt} | messages]
+
+  defp stream_ndjson(async_body, stream_to) do
+    {token_list, _buffer} =
+      Enum.reduce(async_body, {[], ""}, fn chunk, {tokens, buffer} ->
+        full = buffer <> chunk
+        lines = String.split(full, "\n")
+
+        {complete_lines, new_buffer} =
+          case List.pop_at(lines, -1) do
+            {"" , rest} -> {rest, ""}
+            {last, []} -> {[], last}
+            {last, rest} -> {rest, last}
+          end
+
+        new_tokens =
+          Enum.flat_map(complete_lines, fn line ->
+            case Jason.decode(line) do
+              {:ok, %{"message" => %{"content" => token}, "done" => false}}
+              when token != "" ->
+                send(stream_to, {:stream_token, token})
+                [token]
+
+              {:ok, %{"done" => true}} ->
+                []
+
+              _ ->
+                []
+            end
+          end)
+
+        {tokens ++ new_tokens, new_buffer}
+      end)
+
+    Enum.join(token_list)
+  end
+
+  defp parse_classification(content) do
     case Jason.decode(content) do
       {:ok, %{"title" => title} = result} ->
         {:ok,

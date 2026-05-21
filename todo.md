@@ -25,11 +25,9 @@
 - [x] broadcast pipeline status updates to LiveView via PubSub — users see OCR/classification progress inline
 - [x] generate document embeddings and store in pgvector — prerequisite for RAG and semantic search
 - [x] build RAG chat LiveView with source citations and pgvector retrieval — genuine differentiator Paperless lacks
-- [ ] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
-
-- [ ] [high] fix RAG chat — embedding-based retrieval broken, needs debugging
-- [ ] [high] fix font rendering on Chat and Review pages — text unreadable despite CSS fixes
-- [ ] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
+- [x] [high] fix RAG chat — embedding-based retrieval broken, needs debugging
+- [x] [high] fix font rendering on Chat and Review pages — text unreadable despite CSS fixes
+- [x] stream LLM chat responses token-by-token via PubSub — feels responsive, not like a loading spinner
 
 ## Archive Hygiene — Rules & Automation
 
@@ -44,9 +42,31 @@
 - [x] create Correspondent schema linked to documents — matches Paperless metadata users already expect
 - [ ] add bulk tag add/remove on search result selection — efficiency for users managing large archives
 
+## Document Explorer — Browse, Search & View
+
+- [ ] [high] build document index LiveView with paginated list of all documents — archived documents are invisible without this
+- [ ] [high] add full-text search bar to document index wired to existing PostgreSQL search — search backend exists but has no UI
+- [ ] [high] add filter sidebar with tag, document type, correspondent, status, and date range — users need to narrow large archives fast
+- [ ] [high] build document detail/show LiveView with full metadata, OCR text, and file preview — no way to view a filed document today
+- [ ] wire saved searches UI into document index — backend CRUD exists but is completely unexposed
+- [ ] fix dashboard "Archived" stat card to link to document index — currently a dead `#` link
+- [ ] add document thumbnail generation for visual browsing — Paperless users expect to recognize documents by sight
+- [ ] [quick win] show recent documents on dashboard — gives the home page immediate utility beyond stat counters
+- [ ] add inline document editing (title, tags, type, correspondent) from detail view — users need to correct metadata post-archive without re-processing
+
+## Retrieval Strategy — Hybrid Grep + Semantic Search
+
+- [ ] [high] save OCR text as plain text files alongside original documents — enables grep-based retrieval, external tooling, and full portability
+- [ ] [high] embed structured metadata header in text files (title, tags, type, correspondent, date, involved parties) — LLM can grep by field, not just raw text
+- [ ] regenerate text file when document metadata changes (tag edit, type change, etc.) — metadata in files must stay in sync with database
+- [ ] [high] implement grep-based document retrieval for RAG chat as primary search method — exact matches (names, IDs, dates) are what users search for most
+- [ ] add tool-use/function-calling pattern to chat LLM — let the model choose between grep and semantic search per query
+- [ ] keep pgvector embeddings as fallback for fuzzy/semantic queries — "docs about my lease" when text says "rental agreement"
+- [ ] use grep-based retrieval for context-aware classification — find prior docs by matching terms without embedding dependency
+
 ## Smarter Classification — Context-Aware LLM Pipeline
 
-- [ ] [high] inject similar archived documents into LLM classification prompt via embedding similarity search — classification improves as archive grows, core differentiator
+- [ ] [high] inject similar archived documents into classification prompt via grep or embedding search — classification improves as archive grows, core differentiator
 - [ ] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
 - [ ] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
 - [ ] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against

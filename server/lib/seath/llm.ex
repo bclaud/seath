@@ -37,4 +37,31 @@ defmodule Seath.LLM do
       provider -> provider.embed(text)
     end
   end
+
+  @doc """
+  Generates a conversational response for the given messages.
+
+  See `Seath.LLM.Provider.chat/2` for message format details.
+  Returns `{:error, :not_configured}` if no LLM provider is configured.
+  """
+  def chat(messages, opts \\ []) do
+    case impl() do
+      nil -> {:error, :not_configured}
+      provider -> provider.chat(messages, opts)
+    end
+  end
+
+  @doc """
+  Streams a conversational response token-by-token via the configured LLM provider.
+
+  Sends `{:token, token_string}` messages to the `stream_to` pid.
+  See `Seath.LLM.Provider.chat_stream/3` for details.
+  Returns `{:error, :not_configured}` if no LLM provider is configured.
+  """
+  def chat_stream(messages, opts \\ [], stream_to) do
+    case impl() do
+      nil -> {:error, :not_configured}
+      provider -> provider.chat_stream(messages, opts, stream_to)
+    end
+  end
 end
