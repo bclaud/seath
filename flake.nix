@@ -23,6 +23,7 @@
           inotify-tools
           just
           postgresWithPgvector
+          poppler-utils
         ];
 
         devInputs = with pkgs; [

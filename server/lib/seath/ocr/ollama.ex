@@ -2,12 +2,18 @@ defmodule Seath.OCR.Ollama do
   @moduledoc """
   Ollama OCR provider.
 
-  Uses a multimodal Ollama model (default: llava) to extract text
-  from document images. Requires a running Ollama instance.
-  Configure via `OLLAMA_BASE_URL` and `OLLAMA_OCR_MODEL` environment
-  variables or equivalent config entries.
+  For PDF documents, first tries to extract embedded text via `pdftotext`
+  (most PDFs already have selectable text). Falls back to a vision model
+  for scanned/image-only PDFs.
+
+  For images (PNG, JPG, etc.), sends directly to the vision model.
+
+  Requires a running Ollama instance with a vision model pulled.
+  `pdftotext` comes from poppler-utils (included in the Nix dev shell).
   """
   @behaviour Seath.OCR.Provider
+
+  @image_extensions ~w(.png .jpg .jpeg .tiff .bmp)
 
   @impl true
   def extract(file_path) do
@@ -19,39 +25,117 @@ defmodule Seath.OCR.Ollama do
 
     model = Keyword.get(config, :model) || System.get_env("OLLAMA_OCR_MODEL", "llava")
 
-    do_extract(file_path, base_url, model)
+    ext = file_path |> Path.extname() |> String.downcase()
+
+    if ext in @image_extensions do
+      extract_image(file_path, base_url, model)
+    else
+      extract_pdf(file_path, base_url, model)
+    end
   end
 
-  defp do_extract(file_path, base_url, model) do
-    with {:ok, file_data} <- File.read(file_path) do
-      image_data = Base.encode64(file_data)
+  # For image files, send directly to Ollama vision model
+  defp extract_image(file_path, base_url, model) do
+    with {:ok, data} <- File.read(file_path) do
+      send_to_ollama(Base.encode64(data), base_url, model)
+    end
+  end
 
-      body = %{
-        model: model,
-        stream: false,
-        messages: [
-          %{
-            role: "user",
-            content:
-              "Extract all text from this document image. Return only the extracted text, nothing else.",
-            images: [image_data]
-          }
-        ]
-      }
+  # For PDFs: try pdftotext first, fall back to vision OCR
+  defp extract_pdf(file_path, base_url, model) do
+    case extract_pdf_text(file_path) do
+      {:ok, text} when text != "" and text != nil ->
+        {:ok, text}
 
-      case Req.post("#{base_url}/api/chat", json: body) do
-        {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
-          {:ok, String.trim(content)}
+      _ ->
+        extract_pdf_via_vision(file_path, base_url, model)
+    end
+  end
 
-        {:ok, %{status: status, body: body}} ->
-          {:error, {:unexpected_response, status, body}}
+  # Extract embedded text from PDF using pdftotext
+  defp extract_pdf_text(file_path) do
+    case System.cmd("pdftotext", [file_path, "-"]) do
+      {text, 0} ->
+        trimmed = String.trim(text)
+        {:ok, trimmed}
 
-        {:error, %Mint.TransportError{reason: :econnrefused}} ->
-          {:error, :connection_refused}
+      {error, _exit_code} ->
+        {:error, error}
+    end
+  end
 
-        {:error, error} ->
-          {:error, error}
-      end
+  # Convert PDF pages to images and OCR via vision model
+  defp extract_pdf_via_vision(file_path, base_url, model) do
+    tmp_dir = Path.join(System.tmp_dir!(), "seath_ocr_#{Ecto.UUID.generate()}")
+
+    case System.cmd("pdftoppm", ["-png", "-r", "200", file_path, tmp_dir]) do
+      {_, 0} ->
+        pages =
+          tmp_dir
+          |> Path.join("*")
+          |> Path.wildcard()
+          |> Enum.sort()
+
+        if pages == [] do
+          File.rm_rf!(tmp_dir)
+          {:error, :no_pages_to_ocr}
+        else
+          texts =
+            Enum.map(pages, fn page_path ->
+              case extract_image(page_path, base_url, model) do
+                {:ok, text} -> text
+                {:error, _} -> ""
+              end
+            end)
+
+          File.rm_rf!(tmp_dir)
+
+          combined = texts |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n--- Page ---\n\n")
+
+          if combined == "" do
+            {:error, :no_text_extracted}
+          else
+            {:ok, combined}
+          end
+        end
+
+      {error, _exit_code} ->
+        File.rm_rf!(tmp_dir)
+
+        cond do
+          String.contains?(error, "not found") ->
+            {:error, "pdftoppm not found. Install poppler-utils for scanned PDF support."}
+          true ->
+            {:error, {:pdf_conversion_failed, error}}
+        end
+    end
+  end
+
+  defp send_to_ollama(image_b64, base_url, model) do
+    body = %{
+      model: model,
+      stream: false,
+      messages: [
+        %{
+          role: "user",
+          content: "Extract all text from this document image. Return only the extracted text, nothing else.",
+          images: [image_b64]
+        }
+      ]
+    }
+
+    case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 60_000) do
+      {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
+        {:ok, String.trim(content)}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:unexpected_response, status, body}}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, :connection_refused}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 end

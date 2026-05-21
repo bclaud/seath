@@ -133,8 +133,8 @@ llm_provider =
     _ -> nil
   end
 
-if ocr_provider, do: config :seath, :ocr_provider, ocr_provider
-if llm_provider, do: config :seath, :llm_provider, llm_provider
+if ocr_provider, do: config(:seath, :ocr_provider, ocr_provider)
+if llm_provider, do: config(:seath, :llm_provider, llm_provider)
 
 config :seath, Seath.OCR.Azure,
   endpoint: System.get_env("AZURE_DI_ENDPOINT"),

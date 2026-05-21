@@ -9,6 +9,8 @@ defmodule SeathWeb.UploadLive do
 
     pending = Seath.Documents.list_by_status("pending")
     processing = Seath.Documents.list_by_status("processing")
+    ocr_configured? = not is_nil(Seath.OCR.impl())
+    llm_configured? = not is_nil(Seath.LLM.impl())
 
     {:ok,
      socket
@@ -17,7 +19,9 @@ defmodule SeathWeb.UploadLive do
        max_entries: 10,
        max_file_size: 50_000_000
      )
-     |> assign(:in_flight, pending ++ processing)}
+     |> assign(:in_flight, pending ++ processing)
+     |> assign(:ocr_configured, ocr_configured?)
+     |> assign(:llm_configured, llm_configured?)}
   end
 
   @impl true
