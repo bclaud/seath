@@ -93,7 +93,8 @@ defmodule SeathWeb.SettingsLive do
     # Test basic connectivity
     case Req.get("#{base_url}/api/tags", receive_timeout: 3000) do
       {:ok, %{status: 200, body: %{"models" => models}}} ->
-        available = Enum.map(models, & &1["name"])
+        # Ollama returns names like "llama3.2:latest" — strip the :tag suffix
+        available = Enum.map(models, fn m -> String.split(m["name"], ":") |> hd() end)
         ocr_ok = ocr_model in available
         llm_ok = llm_model in available
 
