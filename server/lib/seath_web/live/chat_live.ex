@@ -20,28 +20,12 @@ defmodule SeathWeb.ChatLive do
       |> assign(:query, "")
       |> update(:messages, &(&1 ++ [user_msg]))
 
-    # Start streaming the response in a background task
+    # Start the tool-calling + streaming flow in a background task
     live_view_pid = self()
+    messages = socket.assigns.messages
 
-    # Find similar documents (grep + embedding fallback), then stream the answer
     Task.start(fn ->
-      {:ok, messages, sources} = build_chat_context(query)
-
-      case Seath.LLM.chat_stream(messages, [], live_view_pid) do
-        {:ok, _full_response} ->
-          send(live_view_pid, {:stream_complete, sources})
-
-        {:error, _reason} ->
-          # Fall back to non-streaming chat
-          case Seath.LLM.chat(messages, []) do
-            {:ok, response} ->
-              send(live_view_pid, {:stream_token, response})
-              send(live_view_pid, {:stream_complete, sources})
-
-            {:error, _reason} ->
-              send(live_view_pid, {:stream_error, "Failed to get response"})
-          end
-      end
+      run_tool_calling_flow(messages, query, live_view_pid)
     end)
 
     {:noreply, socket}
@@ -90,6 +74,116 @@ defmodule SeathWeb.ChatLive do
       |> assign(:loading, false)
 
     {:noreply, socket}
+  end
+
+  defp run_tool_calling_flow(existing_messages, query, live_view_pid) do
+    # Build the initial message list with system prompt + conversation history + new query
+    messages = build_tool_messages(existing_messages, query)
+
+    case Seath.LLM.chat_with_tools(messages, Seath.LLM.Tools.tools(), []) do
+      {:ok, %{tool_calls: tool_calls}} when tool_calls != [] ->
+        handle_tool_calls(messages, tool_calls, [], query, live_view_pid)
+
+      {:ok, %{content: content}} ->
+        # No tools needed — LLM answered directly
+        send(live_view_pid, {:stream_token, content})
+        send(live_view_pid, {:stream_complete, []})
+
+      {:error, :not_supported} ->
+        # Fallback to old flow if provider doesn't support tools
+        run_fallback_flow(query, live_view_pid)
+
+      {:error, _reason} ->
+        # Fallback to regular chat on error
+        run_fallback_flow(query, live_view_pid)
+    end
+  end
+
+  defp handle_tool_calls(messages, tool_calls, collected_sources, _query, live_view_pid) do
+    # 1. Add the assistant's tool-calling response to message history
+    assistant_msg = %{role: "assistant", content: "", tool_calls: tool_calls}
+    messages_with_assistant = messages ++ [assistant_msg]
+
+    # 2. Execute each tool and collect results + sources
+    {tool_result_messages, all_sources} =
+      Enum.reduce(tool_calls, {[], collected_sources}, fn call, {results, sources} ->
+        {text, doc_sources} =
+          case Seath.LLM.Tools.execute(
+                 call.function.name,
+                 parse_arguments(call.function.arguments)
+               ) do
+            {:ok, text, doc_sources} -> {text, doc_sources}
+            other -> {"Error executing tool: #{inspect(other)}", []}
+          end
+
+        tool_msg = %{
+          role: "tool",
+          content: text,
+          tool_call_id: call.id
+        }
+
+        {results ++ [tool_msg], sources ++ doc_sources}
+      end)
+
+    # 3. Send the full history back to the LLM for the final answer
+    full_messages = messages_with_assistant ++ tool_result_messages
+
+    # Try streaming first, fall back to non-streaming
+    case Seath.LLM.chat_stream(full_messages, [], live_view_pid) do
+      {:ok, _full_response} ->
+        send(live_view_pid, {:stream_complete, Enum.uniq_by(all_sources, & &1.id)})
+
+      {:error, _reason} ->
+        case Seath.LLM.chat(full_messages, []) do
+          {:ok, response} ->
+            send(live_view_pid, {:stream_token, response})
+            send(live_view_pid, {:stream_complete, Enum.uniq_by(all_sources, & &1.id)})
+
+          {:error, _r} ->
+            send(live_view_pid, {:stream_error, "Failed to get response after tool execution."})
+        end
+    end
+  end
+
+  defp run_fallback_flow(query, live_view_pid) do
+    # Fall back to the original retrieve-then-answer approach
+    {:ok, messages, sources} = build_chat_context(query)
+
+    case Seath.LLM.chat_stream(messages, [], live_view_pid) do
+      {:ok, _full_response} ->
+        send(live_view_pid, {:stream_complete, sources})
+
+      {:error, _reason} ->
+        case Seath.LLM.chat(messages, []) do
+          {:ok, response} ->
+            send(live_view_pid, {:stream_token, response})
+            send(live_view_pid, {:stream_complete, sources})
+
+          {:error, _reason} ->
+            send(live_view_pid, {:stream_error, "Failed to get response"})
+        end
+    end
+  end
+
+  defp build_tool_messages(existing_messages, _query) do
+    # Build conversation history for tool-calling
+    # Existing messages already have user/assistant roles with atom keys
+    # Convert to string keys for LLM API compatibility
+    history =
+      Enum.map(existing_messages, fn msg ->
+        %{role: Atom.to_string(msg.role), content: msg.content}
+      end)
+
+    system_msg = %{
+      role: "system",
+      content:
+        "You are a document Q&A assistant with access to search tools. " <>
+          "Use the available tools to find relevant documents before answering. " <>
+          "When you use a tool, wait for the results before formulating your answer. " <>
+          "Be concise and cite your sources."
+    }
+
+    [system_msg | history]
   end
 
   defp build_chat_context(query) do
@@ -172,6 +266,17 @@ defmodule SeathWeb.ChatLive do
     {:ok, messages, context_docs}
   end
 
+  defp parse_arguments(arguments) when is_map(arguments), do: arguments
+
+  defp parse_arguments(arguments) when is_binary(arguments) do
+    case Jason.decode(arguments) do
+      {:ok, parsed} -> parsed
+      {:error, _} -> %{}
+    end
+  end
+
+  defp parse_arguments(_arguments), do: %{}
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -210,7 +315,7 @@ defmodule SeathWeb.ChatLive do
                 <p class="text-xs text-base-content/90 mb-1">Sources:</p>
                 <div :for={source <- msg.sources} class="flex items-center gap-1 mb-1">
                   <span class="text-xs text-blue-600 truncate">
-                    {source.document.title || source.document.file_name}
+                    {source.title || source.file_name}
                   </span>
                 </div>
               </div>

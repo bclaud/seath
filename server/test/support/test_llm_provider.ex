@@ -42,4 +42,9 @@ defmodule Seath.TestLLMProvider do
     {:ok,
      "Test Invoice\nAmount: $1,234.56\nInvoice #: INV-2024-001\nDate: 2024-01-15\nVendor: Acme Corp\nTax ID: 12.345.678/0001-90"}
   end
+
+  @impl true
+  def chat_with_tools(_messages, _tools, _opts) do
+    {:ok, %{content: "This is a mock tool-calling response.", tool_calls: []}}
+  end
 end

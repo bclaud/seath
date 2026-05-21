@@ -40,4 +40,29 @@ defmodule Seath.LLM.Mock do
     {:ok,
      "Mock OCR text extracted via vision LLM.\n\nAmount: $1,234.56\nInvoice #: INV-2024-001\nDate: 2024-01-15\nTax ID: 12.345.678/0001-90"}
   end
+
+  @impl true
+  def chat_with_tools(_messages, tools, _opts) do
+    # Simulate the LLM deciding to use search_documents tool
+    search_tool = Enum.find(tools, fn t -> t[:function][:name] == "search_documents" end)
+
+    if search_tool do
+      {:ok,
+       %{
+         content: "",
+         tool_calls: [
+           %{
+             id: "mock_tool_call_1",
+             type: "function",
+             function: %{
+               name: "search_documents",
+               arguments: Jason.encode!(%{query: "mock query", max_results: 5})
+             }
+           }
+         ]
+       }}
+    else
+      {:ok, %{content: "This is a mock tool-calling response.", tool_calls: []}}
+    end
+  end
 end

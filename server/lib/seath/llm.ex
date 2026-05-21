@@ -89,4 +89,27 @@ defmodule Seath.LLM do
         end
     end
   end
+
+  @doc """
+  Generates a conversational response with tool/function-calling support.
+
+  Takes messages and tool definitions. Returns either a plain text response
+  or a list of tool calls for the LLM to request execution of.
+
+  Falls back to `{:error, :not_supported}` if the provider doesn't implement
+  `chat_with_tools/3`.
+  """
+  def chat_with_tools(messages, tools, opts \\ []) do
+    case impl() do
+      nil ->
+        {:error, :not_configured}
+
+      provider ->
+        if function_exported?(provider, :chat_with_tools, 3) do
+          provider.chat_with_tools(messages, tools, opts)
+        else
+          {:error, :not_supported}
+        end
+    end
+  end
 end

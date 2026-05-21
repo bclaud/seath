@@ -15,6 +15,25 @@ defmodule Seath.LLM.Provider do
 
   @type chat_message :: %{role: String.t(), content: String.t()}
 
+  @type tool :: %{
+          required(:function) => %{
+            required(:name) => String.t(),
+            required(:description) => String.t(),
+            required(:parameters) => map()
+          }
+        }
+
+  @type tool_call :: %{
+          id: String.t(),
+          type: String.t(),
+          function: %{name: String.t(), arguments: String.t()}
+        }
+
+  @type chat_with_tools_response :: %{
+          content: String.t(),
+          tool_calls: [tool_call()]
+        }
+
   @callback classify(
               text :: String.t(),
               available_tags :: [String.t()],
@@ -57,5 +76,20 @@ defmodule Seath.LLM.Provider do
   @callback ocr_vision(image_data :: binary(), opts :: keyword()) ::
               {:ok, String.t()} | {:error, term()}
 
-  @optional_callbacks ocr_vision: 2
+  @doc """
+  Generates a conversational response with tool/function-calling support.
+
+  Takes a list of messages and tool definitions. Returns either a plain text
+  response or a list of tool calls for the LLM to request execution of.
+
+  Messages follow OpenAI-style format. Tool definitions follow OpenAI's
+  function-calling schema.
+  """
+  @callback chat_with_tools(
+              messages :: [chat_message()],
+              tools :: [tool()],
+              opts :: keyword()
+            ) :: {:ok, chat_with_tools_response()} | {:error, term()}
+
+  @optional_callbacks ocr_vision: 2, chat_with_tools: 3
 end

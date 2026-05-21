@@ -59,4 +59,22 @@ defmodule Seath.LLMTest do
       Application.put_env(:seath, :llm_provider, Seath.LLM.Mock)
     end
   end
+
+  describe "chat_with_tools/3" do
+    test "delegates to the configured provider and returns tool_calls" do
+      tools = Seath.LLM.Tools.tools()
+      assert {:ok, response} = LLM.chat_with_tools([%{role: "user", content: "Hello"}], tools)
+      assert Map.has_key?(response, :content)
+      assert Map.has_key?(response, :tool_calls)
+    end
+
+    test "returns error when no provider is configured" do
+      Application.put_env(:seath, :llm_provider, nil)
+
+      assert {:error, :not_configured} =
+               LLM.chat_with_tools([%{role: "user", content: "Hello"}], [])
+    after
+      Application.put_env(:seath, :llm_provider, Seath.LLM.Mock)
+    end
+  end
 end

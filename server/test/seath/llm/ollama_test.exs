@@ -58,4 +58,26 @@ defmodule Seath.LLM.OllamaTest do
     {_base_url, model} = Ollama.vision_config()
     assert model == "test-vision-model"
   end
+
+  describe "chat_with_tools/3" do
+    test "returns error when Ollama is not reachable" do
+      tools = [
+        %{
+          type: "function",
+          function: %{
+            name: "search_documents",
+            description: "Search documents",
+            parameters: %{
+              type: "object",
+              properties: %{query: %{type: "string"}},
+              required: ["query"]
+            }
+          }
+        }
+      ]
+
+      result = Ollama.chat_with_tools([%{role: "user", content: "Hello"}], tools, [])
+      assert {:error, _reason} = result
+    end
+  end
 end

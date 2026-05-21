@@ -186,6 +186,34 @@ defmodule Seath.LLM.Ollama do
   end
 
   @impl true
+  def chat_with_tools(messages, tools, opts) do
+    {base_url, model} = config()
+    system_prompt = Keyword.get(opts, :system)
+    messages = maybe_prepend_system(messages, system_prompt)
+
+    body = %{
+      model: model,
+      stream: false,
+      messages: messages,
+      tools: tools
+    }
+
+    case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
+      {:ok, %{status: 200, body: %{"message" => message}}} ->
+        parse_tool_response(message)
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:unexpected_response, status, body}}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, :connection_refused}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @impl true
   def chat_stream(messages, opts, stream_to) do
     {base_url, model} = config()
     system_prompt = Keyword.get(opts, :system)
@@ -247,6 +275,32 @@ defmodule Seath.LLM.Ollama do
 
   defp maybe_prepend_system(messages, nil), do: messages
   defp maybe_prepend_system(messages, prompt), do: [%{role: "system", content: prompt} | messages]
+
+  defp parse_tool_response(%{"tool_calls" => calls} = message) do
+    content = Map.get(message, "content", "")
+
+    tool_calls =
+      Enum.map(calls, fn call ->
+        %{
+          id: call["id"] || "tool_#{:rand.uniform(999_999_999)}",
+          type: "function",
+          function: %{
+            name: call["function"]["name"],
+            arguments: call["function"]["arguments"]
+          }
+        }
+      end)
+
+    {:ok, %{content: content, tool_calls: tool_calls}}
+  end
+
+  defp parse_tool_response(%{"content" => content}) do
+    {:ok, %{content: content, tool_calls: []}}
+  end
+
+  defp parse_tool_response(_other) do
+    {:error, :invalid_response_format}
+  end
 
   defp stream_ndjson(async_body, stream_to) do
     {token_list, _buffer} =

@@ -130,6 +130,7 @@ ocr_provider =
 llm_provider =
   case System.get_env("LLM_PROVIDER") do
     "ollama" -> Seath.LLM.Ollama
+    "openai" -> Seath.LLM.OpenAI
     _ -> nil
   end
 
@@ -147,6 +148,11 @@ config :seath, Seath.OCR.Ollama,
 config :seath, Seath.LLM.Ollama,
   base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
   model: System.get_env("OLLAMA_LLM_MODEL", "gemma3:27b")
+
+config :seath, Seath.LLM.OpenAI,
+  api_key: System.get_env("OPENAI_API_KEY"),
+  base_url: System.get_env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+  model: System.get_env("OPENAI_LLM_MODEL", "gpt-4o")
 
 # Document language hint for OCR and classification prompts.
 # Helps the LLM understand the document's language for better extraction.
