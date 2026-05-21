@@ -296,6 +296,19 @@ defmodule SeathWeb.DocumentDetailLive do
 
           <%!-- Sidebar --%>
           <div class="space-y-6">
+            <%!-- Thumbnail preview --%>
+            <div class="bg-white rounded-xl border p-4">
+              <h3 class="text-sm font-semibold text-base-content mb-3">Preview</h3>
+              <div class="bg-gray-50 rounded-lg overflow-hidden">
+                <img
+                  src={~p"/documents/#{@doc.id}/thumbnail"}
+                  alt={"Preview of #{@doc.title || @doc.file_name}"}
+                  class="w-full h-auto object-contain"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+
             <%!-- Confidence --%>
             <div :if={@doc.confidence} class="bg-white rounded-xl border p-6">
               <h3 class="text-sm font-semibold text-base-content mb-3">Confidence</h3>

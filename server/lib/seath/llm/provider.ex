@@ -18,7 +18,8 @@ defmodule Seath.LLM.Provider do
   @callback classify(
               text :: String.t(),
               available_tags :: [String.t()],
-              available_types :: [String.t()]
+              available_types :: [String.t()],
+              opts :: keyword()
             ) ::
               {:ok, classification_result()} | {:error, term()}
 

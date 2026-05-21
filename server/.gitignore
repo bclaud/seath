@@ -38,3 +38,4 @@ npm-debug.log
 # User-uploaded documents and generated text files
 /priv/uploads/
 
+/priv/static/uploads/thumbnails/

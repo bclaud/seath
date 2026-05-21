@@ -21,6 +21,7 @@ defmodule SeathWeb.Router do
     live "/upload", UploadLive, :index
     live "/documents", DocumentIndexLive, :index
     live "/documents/:id", DocumentDetailLive, :show
+    get "/documents/:id/thumbnail", DocumentController, :thumbnail
     live "/review", ReviewLive, :index
     live "/chat", ChatLive, :index
     live "/settings", SettingsLive, :index

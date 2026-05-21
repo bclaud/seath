@@ -40,7 +40,7 @@
 - [x] add watched folder with filesystem polling for auto-import — proven Paperless pattern, reduces ingestion friction
 - [x] add saved searches with tag, type, and date range filters — power users need repeatable document queries
 - [x] create Correspondent schema linked to documents — matches Paperless metadata users already expect
-- [ ] add bulk tag add/remove on search result selection — efficiency for users managing large archives
+- [x] add bulk tag add/remove on search result selection — efficiency for users managing large archives
 
 ## Document Explorer — Browse, Search & View
 
@@ -48,9 +48,9 @@
 - [x] [high] add full-text search bar to document index wired to existing PostgreSQL search — search backend exists but has no UI
 - [x] [high] add filter sidebar with tag, document type, correspondent, status, and date range — users need to narrow large archives fast
 - [x] [high] build document detail/show LiveView with full metadata, OCR text, and file preview — no way to view a filed document today
-- [ ] wire saved searches UI into document index — backend CRUD exists but is completely unexposed
+- [x] wire saved searches UI into document index — backend CRUD exists but is completely unexposed
 - [x] fix dashboard "Archived" stat card to link to document index — currently a dead `#` link
-- [ ] add document thumbnail generation for visual browsing — Paperless users expect to recognize documents by sight
+- [x] add document thumbnail generation for visual browsing — Paperless users expect to recognize documents by sight
 - [x] [quick win] show recent documents on dashboard — gives the home page immediate utility beyond stat counters
 - [x] add inline document editing (title, tags, type, correspondent) from detail view — users need to correct metadata post-archive without re-processing
 
@@ -61,13 +61,13 @@
 - [x] regenerate text file when document metadata changes (tag edit, type change, etc.) — metadata in files must stay in sync with database
 - [x] [high] implement grep-based document retrieval for RAG chat as primary search method — exact matches (names, IDs, dates) are what users search for most
 - [ ] add tool-use/function-calling pattern to chat LLM — let the model choose between grep and semantic search per query
-- [ ] keep pgvector embeddings as fallback for fuzzy/semantic queries — "docs about my lease" when text says "rental agreement"
-- [ ] use grep-based retrieval for context-aware classification — find prior docs by matching terms without embedding dependency
+- [x] keep pgvector embeddings as fallback for fuzzy/semantic queries — "docs about my lease" when text says "rental agreement"
+- [x] use grep-based retrieval for context-aware classification — find prior docs by matching terms without embedding dependency
 
 ## Smarter Classification — Context-Aware LLM Pipeline
 
-- [ ] [high] inject similar archived documents into classification prompt via grep or embedding search — classification improves as archive grows, core differentiator
-- [ ] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
+- [x] [high] inject similar archived documents into classification prompt via grep or embedding search — classification improves as archive grows, core differentiator
+- [x] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
 - [x] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
 - [x] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
 - [x] implement multi-step classification with separate LLM calls per field (title, tags, document_type, correspondent, involved_parties) — follows paperless-gpt approach for better quality
@@ -83,4 +83,4 @@
 - [x] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
 - [x] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
 - [x] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
-- [ ] add search/filter by involved party name — users need to find all documents mentioning a specific person or company
+- [x] add search/filter by involved party name — users need to find all documents mentioning a specific person or company

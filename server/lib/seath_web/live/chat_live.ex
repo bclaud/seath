@@ -23,28 +23,24 @@ defmodule SeathWeb.ChatLive do
     # Start streaming the response in a background task
     live_view_pid = self()
 
-    # Embed the query and find similar documents, then stream the answer
+    # Find similar documents (grep + embedding fallback), then stream the answer
     Task.start(fn ->
-      case build_chat_context(query) do
-        {:ok, messages, sources} ->
-          case Seath.LLM.chat_stream(messages, [], live_view_pid) do
-            {:ok, _full_response} ->
+      {:ok, messages, sources} = build_chat_context(query)
+
+      case Seath.LLM.chat_stream(messages, [], live_view_pid) do
+        {:ok, _full_response} ->
+          send(live_view_pid, {:stream_complete, sources})
+
+        {:error, _reason} ->
+          # Fall back to non-streaming chat
+          case Seath.LLM.chat(messages, []) do
+            {:ok, response} ->
+              send(live_view_pid, {:stream_token, response})
               send(live_view_pid, {:stream_complete, sources})
 
             {:error, _reason} ->
-              # Fall back to non-streaming chat
-              case Seath.LLM.chat(messages, []) do
-                {:ok, response} ->
-                  send(live_view_pid, {:stream_token, response})
-                  send(live_view_pid, {:stream_complete, sources})
-
-                {:error, _reason} ->
-                  send(live_view_pid, {:stream_error, "Failed to get response"})
-              end
+              send(live_view_pid, {:stream_error, "Failed to get response"})
           end
-
-        {:error, reason} ->
-          send(live_view_pid, {:stream_error, reason})
       end
     end)
 
@@ -97,42 +93,83 @@ defmodule SeathWeb.ChatLive do
   end
 
   defp build_chat_context(query) do
-    case Seath.LLM.embed(query) do
-      {:ok, query_embedding} ->
-        similar =
-          Seath.Embeddings.similarity_search(query_embedding, limit: 3, min_score: 0.5)
+    # Step 1: Try grep-based retrieval first (exact match for names, IDs, dates)
+    grep_results =
+      Seath.Retrieval.search(query, limit: 3, max_docs: 3, include_docs: true, status: "archived")
 
-        context_parts =
-          Enum.map(similar, fn %{document: doc} ->
-            "--- Document: #{doc.title || doc.file_name} ---\n#{String.slice(doc.ocr_text || "", 0, 1000)}"
-          end)
+    grep_count = length(grep_results)
 
-        context = Enum.join(context_parts, "\n\n")
+    # Step 2: Fall back to embedding similarity search if grep didn't return enough results
+    embedding_results =
+      if grep_count < 3 do
+        case Seath.LLM.embed(query) do
+          {:ok, query_embedding} ->
+            Seath.Embeddings.similarity_search(query_embedding,
+              limit: 3 - grep_count,
+              min_score: 0.5
+            )
+            |> Enum.map(fn %{embedding: _e, document: doc, score: _} ->
+              %{document_id: doc.id, document: doc, match_count: 0, matches: []}
+            end)
 
-        messages = [
+          {:error, _reason} ->
+            []
+        end
+      else
+        []
+      end
+
+    # Merge results: grep results first (higher priority), embeddings as fallback
+    all_results = grep_results ++ embedding_results
+
+    {context_messages, context_docs} =
+      case all_results do
+        [] ->
+          {[], []}
+
+        _ ->
+          context_parts =
+            Enum.map(all_results, fn %{document: doc} ->
+              text_snippet = String.slice(doc.ocr_text || "", 0, 1000)
+              "--- Document: #{doc.title || doc.file_name} ---\n#{text_snippet}"
+            end)
+
+          {[
+             %{
+               role: "system",
+               content:
+                 "You are a document Q&A assistant. Answer the user's question based only on the provided document context. If the context doesn't contain relevant information, say so. Be concise."
+             },
+             %{
+               role: "user",
+               content: """
+               Context documents:
+               #{Enum.join(context_parts, "\n\n")}
+
+               Question: #{query}
+
+               Answer concisely based only on the provided context. If the context doesn't contain relevant information, say so.
+               """
+             }
+           ], all_results}
+      end
+
+    # If no context was found, fall back to a simple query without context
+    messages =
+      if context_messages == [] do
+        [
           %{
             role: "system",
             content:
-              "You are a document Q&A assistant. Answer the user's question based only on the provided document context. If the context doesn't contain relevant information, say so. Be concise."
+              "You are a document Q&A assistant. Answer the user's question as best you can. If you don't know, say so."
           },
-          %{
-            role: "user",
-            content: """
-            Context documents:
-            #{context}
-
-            Question: #{query}
-
-            Answer concisely based only on the provided context. If the context doesn't contain relevant information, say so.
-            """
-          }
+          %{role: "user", content: query}
         ]
+      else
+        context_messages
+      end
 
-        {:ok, messages, similar}
-
-      {:error, _reason} ->
-        {:error, "Failed to process query"}
-    end
+    {:ok, messages, context_docs}
   end
 
   @impl true

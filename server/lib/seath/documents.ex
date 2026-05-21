@@ -277,6 +277,7 @@ defmodule Seath.Documents do
     tag_ids = Keyword.get(opts, :tag_ids)
     document_type_id = Keyword.get(opts, :document_type_id)
     correspondent_id = Keyword.get(opts, :correspondent_id)
+    involved_party_name = Keyword.get(opts, :involved_party_name)
     date_from = Keyword.get(opts, :date_from)
     date_to = Keyword.get(opts, :date_to)
 
@@ -287,6 +288,7 @@ defmodule Seath.Documents do
     base_query = maybe_filter_by_tags(base_query, tag_ids)
     base_query = maybe_filter_by_document_type(base_query, document_type_id)
     base_query = maybe_filter_by_correspondent(base_query, correspondent_id)
+    base_query = maybe_filter_by_involved_party(base_query, involved_party_name)
     base_query = maybe_filter_by_date_range(base_query, date_from, date_to)
 
     sort_field = valid_sort_field(sort_by)
@@ -369,6 +371,17 @@ defmodule Seath.Documents do
 
   defp maybe_filter_by_correspondent(query, correspondent_id) do
     from(d in query, where: d.correspondent_id == ^correspondent_id)
+  end
+
+  defp maybe_filter_by_involved_party(query, nil), do: query
+  defp maybe_filter_by_involved_party(query, ""), do: query
+
+  defp maybe_filter_by_involved_party(query, name) do
+    from(d in query,
+      join: ip in assoc(d, :involved_parties),
+      where: ilike(ip.name, ^"%#{name}%"),
+      distinct: d.id
+    )
   end
 
   defp maybe_filter_by_date_range(query, nil, nil), do: query

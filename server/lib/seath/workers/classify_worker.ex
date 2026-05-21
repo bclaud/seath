@@ -16,6 +16,7 @@ defmodule Seath.Workers.ClassifyWorker do
   alias Seath.DocumentTypes
   alias Seath.Correspondents
   alias Seath.InvolvedParties
+  alias Seath.Retrieval
   require Logger
 
   @impl Oban.Worker
@@ -88,7 +89,20 @@ defmodule Seath.Workers.ClassifyWorker do
     tag_names = Enum.map(tags, & &1.name)
     type_names = Enum.map(types, & &1.name)
 
-    Seath.LLM.classify(text, tag_names, type_names)
+    # Search for similar archived documents via grep-based retrieval
+    # to inject as context for the LLM classification prompt
+    similar_docs =
+      text
+      |> Retrieval.search(
+        limit: 3,
+        max_docs: 3,
+        include_docs: true,
+        status: "archived"
+      )
+
+    opts = if similar_docs != [], do: [similar_documents: similar_docs], else: []
+
+    Seath.LLM.classify(text, tag_names, type_names, opts)
   end
 
   defp apply_classification(doc, result) do
@@ -149,7 +163,9 @@ defmodule Seath.Workers.ClassifyWorker do
       doc
     else
       all_types = DocumentTypes.list_types()
-      matched = Enum.find(all_types, fn t -> String.downcase(t.name) == String.downcase(type_name) end)
+
+      matched =
+        Enum.find(all_types, fn t -> String.downcase(t.name) == String.downcase(type_name) end)
 
       type =
         case matched do
@@ -165,7 +181,9 @@ defmodule Seath.Workers.ClassifyWorker do
         end
 
       case type do
-        nil -> doc
+        nil ->
+          doc
+
         t ->
           {:ok, updated} = Documents.update_document(doc, %{document_type_id: t.id})
           updated
@@ -184,7 +202,9 @@ defmodule Seath.Workers.ClassifyWorker do
       doc
     else
       all_corrs = Correspondents.list_correspondents()
-      matched = Enum.find(all_corrs, fn c -> String.downcase(c.name) == String.downcase(corr_name) end)
+
+      matched =
+        Enum.find(all_corrs, fn c -> String.downcase(c.name) == String.downcase(corr_name) end)
 
       correspondent =
         case matched do
@@ -200,7 +220,9 @@ defmodule Seath.Workers.ClassifyWorker do
         end
 
       case correspondent do
-        nil -> doc
+        nil ->
+          doc
+
         corr ->
           {:ok, updated} = Documents.update_document(doc, %{correspondent_id: corr.id})
           updated

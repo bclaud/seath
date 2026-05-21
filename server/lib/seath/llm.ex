@@ -17,12 +17,16 @@ defmodule Seath.LLM do
   @doc """
   Classifies document text using the configured LLM provider.
 
+  ## Options
+    * `:similar_documents` — list of similar archived document maps to inject as context
+    * `:language` — document language (default from config)
+
   Returns `{:error, :not_configured}` if no LLM provider is configured.
   """
-  def classify(text, available_tags, available_types) do
+  def classify(text, available_tags, available_types, opts \\ []) do
     case impl() do
       nil -> {:error, :not_configured}
-      provider -> provider.classify(text, available_tags, available_types)
+      provider -> provider.classify(text, available_tags, available_types, opts)
     end
   end
 

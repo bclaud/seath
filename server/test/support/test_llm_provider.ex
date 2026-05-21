@@ -5,7 +5,7 @@ defmodule Seath.TestLLMProvider do
   @behaviour Seath.LLM.Provider
 
   @impl true
-  def classify(_text, _available_tags, _available_types) do
+  def classify(_text, _available_tags, _available_types, _opts \\ []) do
     {:ok,
      %{
        title: "Test Invoice",

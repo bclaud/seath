@@ -8,12 +8,14 @@ defmodule SeathWeb.DocumentIndexLive do
     tags = Seath.Tags.list_tags()
     types = Seath.DocumentTypes.list_types()
     correspondents = Seath.Correspondents.list_correspondents()
+    saved_searches = Seath.SavedSearches.list_saved_searches()
 
     {:ok,
      socket
      |> assign(:tags, tags)
      |> assign(:types, types)
      |> assign(:correspondents, correspondents)
+     |> assign(:saved_searches, saved_searches)
      |> assign(:sidebar_open, false)
      |> assign(:total_count, 0)
      |> assign(:page, 1)
@@ -22,6 +24,9 @@ defmodule SeathWeb.DocumentIndexLive do
      |> assign(:sort_order, :desc)
      |> assign(:search, "")
      |> assign(:filters, %{})
+     |> assign(:selected_ids, MapSet.new())
+     |> assign(:saving_search, false)
+     |> assign(:save_search_name, "")
      |> stream(:documents, [], reset: true)}
   end
 
@@ -37,6 +42,7 @@ defmodule SeathWeb.DocumentIndexLive do
       tag_ids: parse_list_param(params["tag_ids"]),
       document_type_id: params["document_type_id"] || "",
       correspondent_id: params["correspondent_id"] || "",
+      involved_party: params["involved_party"] || "",
       date_from: params["date_from"] || "",
       date_to: params["date_to"] || ""
     }
@@ -51,9 +57,12 @@ defmodule SeathWeb.DocumentIndexLive do
       tag_ids: empty_list_to_nil(filters.tag_ids),
       document_type_id: blank_to_nil(filters.document_type_id),
       correspondent_id: blank_to_nil(filters.correspondent_id),
+      involved_party: blank_to_nil(filters.involved_party),
       date_from: blank_to_nil(filters.date_from),
       date_to: blank_to_nil(filters.date_to)
     ]
+
+    saved_searches = Seath.SavedSearches.list_saved_searches()
 
     {documents, total_count} = Seath.Documents.list_documents_paginated(opts)
 
@@ -64,6 +73,7 @@ defmodule SeathWeb.DocumentIndexLive do
      |> assign(:sort_order, sort_order)
      |> assign(:search, search)
      |> assign(:filters, filters)
+     |> assign(:saved_searches, saved_searches)
      |> assign(:total_count, total_count)
      |> assign(:pages, total_pages(total_count, @per_page))
      |> assign(:no_results, documents == [])
@@ -116,6 +126,7 @@ defmodule SeathWeb.DocumentIndexLive do
       tag_ids: filters_params["tag_ids"] || [],
       document_type_id: filters_params["document_type_id"] || "",
       correspondent_id: filters_params["correspondent_id"] || "",
+      involved_party: filters_params["involved_party"] || "",
       date_from: filters_params["date_from"] || "",
       date_to: filters_params["date_to"] || ""
     }
@@ -131,6 +142,183 @@ defmodule SeathWeb.DocumentIndexLive do
   @impl true
   def handle_event("toggle_sidebar", _params, socket) do
     {:noreply, assign(socket, :sidebar_open, !socket.assigns.sidebar_open)}
+  end
+
+  # --- Saved Searches ---
+
+  @impl true
+  def handle_event("start_save_search", _params, socket) do
+    {:noreply, socket |> assign(:saving_search, true) |> assign(:save_search_name, "")}
+  end
+
+  @impl true
+  def handle_event("cancel_save_search", _params, socket) do
+    {:noreply, socket |> assign(:saving_search, false) |> assign(:save_search_name, "")}
+  end
+
+  @impl true
+  def handle_event("save_search", %{"name" => name}, socket) when name != "" do
+    filters = socket.assigns.filters
+    name = String.trim(name)
+
+    attrs = %{
+      name: name,
+      query: socket.assigns.search,
+      tag_ids: filters.tag_ids,
+      status_filter: filters.status,
+      document_type_id: blank_to_nil(filters.document_type_id),
+      date_from: date_string_to_date(filters.date_from),
+      date_to: date_string_to_date(filters.date_to)
+    }
+
+    case Seath.SavedSearches.create_saved_search(attrs) do
+      {:ok, _search} ->
+        saved_searches = Seath.SavedSearches.list_saved_searches()
+
+        {:noreply,
+         socket
+         |> assign(:saved_searches, saved_searches)
+         |> assign(:saving_search, false)
+         |> assign(:save_search_name, "")
+         |> put_flash(:info, "Saved search \"#{name}\".")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to save search.")}
+    end
+  end
+
+  def handle_event("save_search", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("load_saved_search", %{"id" => id}, socket) do
+    search = Seath.SavedSearches.get_saved_search!(id)
+    filters = socket.assigns.filters
+
+    updated_filters = %{
+      filters
+      | tag_ids: search.tag_ids || [],
+        status: search.status_filter || "",
+        document_type_id: search.document_type_id || "",
+        date_from: date_to_string(search.date_from),
+        date_to: date_to_string(search.date_to)
+    }
+
+    {:noreply,
+     push_patch(socket,
+       to: ~p"/documents?#{build_query(socket, updated_filters, 1, search: search.query || "")}"
+     )}
+  end
+
+  @impl true
+  def handle_event("delete_saved_search", %{"id" => id}, socket) do
+    search = Seath.SavedSearches.get_saved_search!(id)
+    name = search.name
+    Seath.SavedSearches.delete_saved_search(search)
+    saved_searches = Seath.SavedSearches.list_saved_searches()
+
+    {:noreply,
+     socket
+     |> assign(:saved_searches, saved_searches)
+     |> put_flash(:info, "Deleted saved search \"#{name}\".")}
+  end
+
+  # --- Bulk Selection ---
+
+  @impl true
+  def handle_event("toggle_select", %{"id" => id}, socket) do
+    selected_ids =
+      if MapSet.member?(socket.assigns.selected_ids, id) do
+        MapSet.delete(socket.assigns.selected_ids, id)
+      else
+        MapSet.put(socket.assigns.selected_ids, id)
+      end
+
+    {:noreply, assign(socket, :selected_ids, selected_ids)}
+  end
+
+  @impl true
+  def handle_event("select_all", _params, socket) do
+    all_ids =
+      socket.streams.documents
+      |> Enum.map(fn {_id, doc} -> doc.id end)
+      |> MapSet.new()
+
+    {:noreply, assign(socket, :selected_ids, all_ids)}
+  end
+
+  @impl true
+  def handle_event("deselect_all", _params, socket) do
+    {:noreply, assign(socket, :selected_ids, MapSet.new())}
+  end
+
+  @impl true
+  def handle_event("bulk_add_tag", %{"tag_id" => tag_id}, socket) do
+    if tag_id != "" do
+      tag = Seath.Tags.get_tag!(tag_id)
+      count = MapSet.size(socket.assigns.selected_ids)
+
+      socket.assigns.selected_ids
+      |> Enum.each(fn id ->
+        doc = Seath.Documents.get_document!(id)
+        Seath.Tags.add_tag_to_document(doc, tag)
+      end)
+
+      {documents, total_count} =
+        Seath.Documents.list_documents_paginated(
+          page: socket.assigns.page,
+          per_page: socket.assigns.per_page,
+          sort_by: socket.assigns.sort_by,
+          sort_order: socket.assigns.sort_order,
+          search: socket.assigns.search
+        )
+
+      {:noreply,
+       socket
+       |> assign(:total_count, total_count)
+       |> assign(:pages, total_pages(total_count, @per_page))
+       |> assign(:no_results, documents == [])
+       |> assign(:selected_ids, MapSet.new())
+       |> stream(:documents, documents, reset: true)
+       |> put_flash(:info, "Tag '#{tag.name}' added to #{count} document(s).")}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("bulk_remove_tag", %{"tag_id" => tag_id}, socket) do
+    if tag_id != "" do
+      tag = Seath.Tags.get_tag!(tag_id)
+      count = MapSet.size(socket.assigns.selected_ids)
+
+      socket.assigns.selected_ids
+      |> Enum.each(fn id ->
+        doc = Seath.Documents.get_document!(id)
+        Seath.Tags.remove_tag_from_document(doc, tag)
+      end)
+
+      {documents, total_count} =
+        Seath.Documents.list_documents_paginated(
+          page: socket.assigns.page,
+          per_page: socket.assigns.per_page,
+          sort_by: socket.assigns.sort_by,
+          sort_order: socket.assigns.sort_order,
+          search: socket.assigns.search
+        )
+
+      {:noreply,
+       socket
+       |> assign(:total_count, total_count)
+       |> assign(:pages, total_pages(total_count, @per_page))
+       |> assign(:no_results, documents == [])
+       |> assign(:selected_ids, MapSet.new())
+       |> stream(:documents, documents, reset: true)
+       |> put_flash(:info, "Tag '#{tag.name}' removed from #{count} document(s).")}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -241,6 +429,21 @@ defmodule SeathWeb.DocumentIndexLive do
                 </select>
               </div>
 
+              <%!-- Involved Party --%>
+              <div class="mb-4">
+                <label class="block text-xs font-semibold text-base-content/80 mb-2 uppercase tracking-wider">
+                  Involved Party
+                </label>
+                <input
+                  type="text"
+                  name="involved_party"
+                  value={@filters.involved_party}
+                  placeholder="Filter by name..."
+                  phx-debounce="300"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
               <%!-- Date range --%>
               <div class="mb-4">
                 <label class="block text-xs font-semibold text-base-content/80 mb-2 uppercase tracking-wider">
@@ -266,6 +469,73 @@ defmodule SeathWeb.DocumentIndexLive do
                 />
               </div>
             </form>
+
+            <%!-- Save Current Filters --%>
+            <div class="border-t border-gray-200 pt-4 mt-4">
+              <%= if @saving_search do %>
+                <form phx-submit="save_search" class="space-y-2">
+                  <input
+                    type="text"
+                    name="name"
+                    value={@save_search_name}
+                    placeholder="Search name..."
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    autofocus
+                  />
+                  <div class="flex gap-2">
+                    <button
+                      type="submit"
+                      class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="cancel_save_search"
+                      class="px-3 py-1.5 border border-gray-300 text-base-content/70 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              <% else %>
+                <button
+                  phx-click="start_save_search"
+                  class="w-full px-3 py-2 border border-dashed border-gray-300 text-base-content/60 rounded-lg text-xs font-medium hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <.icon name="hero-bookmark" class="w-3.5 h-3.5" /> Save Current Filters
+                </button>
+              <% end %>
+            </div>
+
+            <%!-- Saved Searches --%>
+            <div :if={@saved_searches != []} class="border-t border-gray-200 pt-4 mt-4">
+              <h4 class="text-xs font-semibold text-base-content/80 mb-3 uppercase tracking-wider">
+                Saved Searches
+              </h4>
+              <div class="space-y-1">
+                <div
+                  :for={search <- @saved_searches}
+                  class="group flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <button
+                    phx-click="load_saved_search"
+                    phx-value-id={search.id}
+                    class="flex items-center gap-2 text-sm text-base-content/80 hover:text-blue-600 transition-colors"
+                  >
+                    <.icon name="hero-magnifying-glass" class="w-3.5 h-3.5 shrink-0" />
+                    <span class="truncate">{search.name}</span>
+                  </button>
+                  <button
+                    phx-click="delete_saved_search"
+                    phx-value-id={search.id}
+                    class="opacity-0 group-hover:opacity-100 text-base-content/40 hover:text-red-500 transition-all"
+                  >
+                    <.icon name="hero-trash" class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -304,6 +574,44 @@ defmodule SeathWeb.DocumentIndexLive do
               </div>
             </div>
 
+            <%!-- Bulk action bar --%>
+            <div
+              :if={MapSet.size(@selected_ids) > 0}
+              class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between"
+            >
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-blue-800 font-medium">
+                  {MapSet.size(@selected_ids)} document(s) selected
+                </span>
+                <button
+                  phx-click="deselect_all"
+                  class="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Clear selection
+                </button>
+              </div>
+              <div class="flex items-center gap-2">
+                <form phx-change="bulk_add_tag" id="bulk-add-tag-form">
+                  <select
+                    name="tag_id"
+                    class="px-3 py-1.5 border border-blue-300 bg-white rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Add tag...</option>
+                    <option :for={tag <- @tags} value={tag.id}>{tag.name}</option>
+                  </select>
+                </form>
+                <form phx-change="bulk_remove_tag" id="bulk-remove-tag-form">
+                  <select
+                    name="tag_id"
+                    class="px-3 py-1.5 border border-blue-300 bg-white rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Remove tag...</option>
+                    <option :for={tag <- @tags} value={tag.id}>{tag.name}</option>
+                  </select>
+                </form>
+              </div>
+            </div>
+
             <%!-- Document count --%>
             <div class="mb-4 text-sm text-base-content/70">
               {format_count(@total_count, @page, @per_page)}
@@ -314,6 +622,16 @@ defmodule SeathWeb.DocumentIndexLive do
               <table class="w-full">
                 <thead>
                   <tr class="border-b bg-gray-50">
+                    <th class="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        phx-click={
+                          if(MapSet.size(@selected_ids) > 0, do: "deselect_all", else: "select_all")
+                        }
+                        checked={MapSet.size(@selected_ids) > 0}
+                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     <th
                       phx-click="sort"
                       phx-value-field="title"
@@ -360,7 +678,7 @@ defmodule SeathWeb.DocumentIndexLive do
                 </thead>
                 <tbody id="documents-list" phx-update="stream" class="divide-y divide-gray-100">
                   <tr :if={@no_results}>
-                    <td colspan="7" class="px-4 py-12 text-center">
+                    <td colspan="8" class="px-4 py-12 text-center">
                       <.icon
                         name="hero-document-magnifying-glass"
                         class="w-12 h-12 mx-auto mb-3 text-base-content/40"
@@ -377,12 +695,29 @@ defmodule SeathWeb.DocumentIndexLive do
                     class="hover:bg-gray-50 transition-colors"
                   >
                     <td class="px-4 py-3">
-                      <.link
-                        navigate={~p"/documents/#{doc.id}"}
-                        class="text-sm font-medium text-blue-600 hover:text-blue-800"
-                      >
-                        {doc.title || doc.file_name}
-                      </.link>
+                      <input
+                        type="checkbox"
+                        phx-click="toggle_select"
+                        phx-value-id={doc.id}
+                        checked={MapSet.member?(@selected_ids, doc.id)}
+                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-3">
+                        <img
+                          src={~p"/documents/#{doc.id}/thumbnail"}
+                          alt="Thumbnail"
+                          class="shrink-0 w-12 h-12 rounded border object-cover bg-gray-50"
+                          loading="lazy"
+                        />
+                        <.link
+                          navigate={~p"/documents/#{doc.id}"}
+                          class="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
+                          {doc.title || doc.file_name}
+                        </.link>
+                      </div>
                     </td>
                     <td class="px-4 py-3 text-sm text-base-content/80">
                       {(doc.document_type && doc.document_type.name) || "—"}
@@ -525,6 +860,13 @@ defmodule SeathWeb.DocumentIndexLive do
       end
 
     params =
+      if filters[:involved_party] && filters[:involved_party] != "" do
+        Map.put(params, :involved_party, filters[:involved_party])
+      else
+        params
+      end
+
+    params =
       if filters[:date_from] && filters[:date_from] != "" do
         Map.put(params, :date_from, filters[:date_from])
       else
@@ -614,4 +956,18 @@ defmodule SeathWeb.DocumentIndexLive do
   defp format_date(dt) do
     dt |> DateTime.to_date() |> Date.to_string()
   end
+
+  defp date_string_to_date(""), do: nil
+  defp date_string_to_date(nil), do: nil
+
+  defp date_string_to_date(str) when is_binary(str) do
+    case Date.from_iso8601(str) do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  defp date_to_string(nil), do: ""
+  defp date_to_string(%Date{} = date), do: Date.to_string(date)
+  defp date_to_string(str) when is_binary(str), do: str
 end

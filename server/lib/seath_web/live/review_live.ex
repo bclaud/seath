@@ -79,7 +79,8 @@ defmodule SeathWeb.ReviewLive do
     end
 
     updated =
-      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type, :correspondent])
+      Seath.Documents.get_document!(id)
+      |> Seath.Repo.preload([:tags, :document_type, :correspondent])
 
     {:noreply, assign(socket, :selected_doc, updated)}
   end
@@ -194,7 +195,8 @@ defmodule SeathWeb.ReviewLive do
     Seath.Tags.remove_tag_from_document(doc, tag)
 
     updated =
-      Seath.Documents.get_document!(id) |> Seath.Repo.preload([:tags, :document_type, :correspondent])
+      Seath.Documents.get_document!(id)
+      |> Seath.Repo.preload([:tags, :document_type, :correspondent])
 
     {:noreply, assign(socket, :selected_doc, updated)}
   end
@@ -298,7 +300,9 @@ defmodule SeathWeb.ReviewLive do
                     <option
                       :for={type <- @types}
                       value={type.id}
-                      selected={@selected_doc.document_type && @selected_doc.document_type.id == type.id}
+                      selected={
+                        @selected_doc.document_type && @selected_doc.document_type.id == type.id
+                      }
                     >
                       {type.name}
                     </option>
@@ -353,7 +357,9 @@ defmodule SeathWeb.ReviewLive do
                     <option
                       :for={corr <- @correspondents}
                       value={corr.id}
-                      selected={@selected_doc.correspondent && @selected_doc.correspondent.id == corr.id}
+                      selected={
+                        @selected_doc.correspondent && @selected_doc.correspondent.id == corr.id
+                      }
                     >
                       {corr.name}
                     </option>

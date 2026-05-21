@@ -41,20 +41,54 @@ defmodule Seath.LLM.Ollama do
   end
 
   @impl true
-  def classify(text, available_tags, available_types) do
+  def classify(text, available_tags, available_types, opts \\ []) do
     {base_url, model} = config()
-    do_classify(text, available_tags, available_types, base_url, model)
+    do_classify(text, available_tags, available_types, opts, base_url, model)
   end
 
-  defp do_classify(text, available_tags, available_types, base_url, model) do
+  defp do_classify(text, available_tags, available_types, opts, base_url, model) do
     language = Application.get_env(:seath, :document_language, "Portuguese")
     tags_list = Enum.join(available_tags, ", ")
     types_list = Enum.join(available_types, ", ")
 
+    similar_context =
+      case Keyword.get(opts, :similar_documents) do
+        nil ->
+          ""
+
+        docs when is_list(docs) and docs != [] ->
+          doc_blocks =
+            Enum.map(docs, fn d ->
+              doc = d.document || %{}
+
+              tags_str =
+                (doc.tags || [])
+                |> Enum.map(& &1.name)
+                |> Enum.join(", ")
+
+              type_name = (doc.document_type && doc.document_type.name) || ""
+              corr_name = (doc.correspondent && doc.correspondent.name) || ""
+
+              """
+              <document>
+                <title>#{doc.title || ""}</title>
+                <type>#{type_name}</type>
+                <tags>#{tags_str}</tags>
+                <correspondent>#{corr_name}</correspondent>
+              </document>
+              """
+            end)
+
+          "\n<similar_documents>\n#{Enum.join(doc_blocks, "\n")}\n</similar_documents>\n"
+
+        _ ->
+          ""
+      end
+
     prompt = """
     I will provide you with the content of a document that has been read by OCR (so it may contain errors).
     Your task is to classify this document. The content is likely in #{language}.
-
+    #{similar_context}
     <available_document_types>
     #{types_list}
     </available_document_types>
