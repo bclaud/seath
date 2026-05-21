@@ -140,7 +140,7 @@ defmodule SeathWeb.ReviewLive do
     <Layouts.app flash={@flash} current_page={:review} review_count={length(@documents)}>
       <div class="max-w-6xl mx-auto py-8 px-4">
         <h1 class="text-2xl font-bold mb-2">Document Review</h1>
-        <p class="text-gray-500 mb-8">
+        <p class="text-gray-700 mb-8">
           {length(@documents)} document(s) awaiting review
         </p>
 
@@ -191,15 +191,15 @@ defmodule SeathWeb.ReviewLive do
               />
               <div phx-click="select" phx-value-id={doc.id} class="flex-1 cursor-pointer">
                 <h3 class="font-medium text-gray-900 truncate">{doc.title || doc.file_name}</h3>
-                <p class="text-sm text-gray-500 mt-1">
+                <p class="text-sm text-gray-700 mt-1">
                   {doc.file_type} · {format_file_size(doc.file_size)}
                 </p>
               </div>
             </div>
 
-            <div :if={@documents == []} class="text-center py-12 text-gray-400">
-              <.icon name="hero-inbox" class="w-12 h-12 mx-auto mb-3" />
-              <p>No documents awaiting review</p>
+            <div :if={@documents == []} class="text-center py-12 text-gray-500">
+              <.icon name="hero-inbox" class="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <p class="text-gray-700">No documents awaiting review</p>
             </div>
           </div>
 
@@ -208,7 +208,7 @@ defmodule SeathWeb.ReviewLive do
             <div class="bg-white rounded-xl border p-6">
               <%!-- Title --%>
               <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                <label class="block text-sm font-medium text-gray-800 mb-1">Title</label>
                 <form phx-change="update_title" phx-value-id={@selected_doc.id}>
                   <input
                     type="text"
@@ -221,7 +221,7 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- Document type --%>
               <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+                <label class="block text-sm font-medium text-gray-800 mb-1">Document Type</label>
                 <p class="text-gray-900">
                   {if @selected_doc.document_type, do: @selected_doc.document_type.name, else: "None"}
                 </p>
@@ -229,7 +229,7 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- Confidence --%>
               <div :if={@selected_doc.confidence} class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-1">
+                <label class="block text-sm font-medium text-gray-800 mb-1">
                   Classification Confidence
                 </label>
                 <div class="flex items-center gap-3">
@@ -262,7 +262,7 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- Tags --%>
               <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <label class="block text-sm font-medium text-gray-800 mb-2">Tags</label>
                 <div class="flex flex-wrap gap-2 mb-3">
                   <span
                     :for={tag <- @selected_doc.tags}
@@ -289,7 +289,7 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- OCR Text preview --%>
               <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Extracted Text</label>
+                <label class="block text-sm font-medium text-gray-800 mb-1">Extracted Text</label>
                 <div class="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
                   <p class="text-sm text-gray-600 whitespace-pre-wrap">
                     {if @selected_doc.ocr_text,
@@ -323,9 +323,9 @@ defmodule SeathWeb.ReviewLive do
 
           <%!-- Empty state --%>
           <div :if={!@selected_doc} class="lg:col-span-2 flex items-center justify-center">
-            <div class="text-center text-gray-400">
-              <.icon name="hero-document-magnifying-glass" class="w-16 h-16 mx-auto mb-4" />
-              <p class="text-lg">Select a document to review</p>
+            <div class="text-center text-gray-500">
+              <.icon name="hero-document-magnifying-glass" class="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <p class="text-lg text-gray-700">Select a document to review</p>
             </div>
           </div>
         </div>

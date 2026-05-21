@@ -75,13 +75,11 @@ defmodule SeathWeb.ChatLive do
     <Layouts.app flash={@flash} current_page={:chat}>
       <div class="max-w-4xl mx-auto py-8 px-4 h-[calc(100vh-4rem)] flex flex-col">
         <h1 class="text-2xl font-bold mb-2">Document Chat</h1>
-        <p class="text-gray-500 mb-6">Ask questions about your archived documents</p>
-
-        <div id="chat-messages" class="flex-1 overflow-y-auto space-y-4 mb-4">
+        <p class="text-gray-700 mb-6">Ask questions about your archived documents</p>
           <div :if={@messages == []} class="flex items-center justify-center h-full">
-            <div class="text-center text-gray-400">
-              <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto mb-4" />
-              <p class="text-lg">Ask a question about your documents</p>
+            <div class="text-center text-gray-500">
+              <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <p class="text-lg text-gray-700">Ask a question about your documents</p>
             </div>
           </div>
 
@@ -112,7 +110,6 @@ defmodule SeathWeb.ChatLive do
               </div>
             </div>
           </div>
-        </div>
 
         <form id="chat-form" phx-submit="submit" class="flex gap-3">
           <input
