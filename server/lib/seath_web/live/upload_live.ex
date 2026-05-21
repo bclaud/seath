@@ -67,37 +67,18 @@ defmodule SeathWeb.UploadLive do
 
         <%!-- Upload zone --%>
         <div
-          id="upload-zone"
           phx-drop-target={@uploads.document.ref}
-          phx-hook=".UploadZone"
           class={[
-            "border-2 border-dashed border-gray-300 rounded-xl p-12 text-center",
-            "hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer",
+            "border-2 border-dashed border-gray-300 rounded-xl text-center transition-colors",
             length(@uploads.document.entries) > 0 && "border-blue-400 bg-blue-50"
           ]}
         >
-          <.live_file_input upload={@uploads.document} />
-          <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-          <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
-          <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
-          <script :type={Phoenix.LiveView.ColocatedHook} name=".UploadZone">
-            export default {
-              mounted() {
-                this.el.addEventListener("click", (e) => {
-                  e.stopPropagation();
-                  const input = this.el.querySelector('input[type="file"]');
-                  if (input) input.click();
-                });
-                this.el.addEventListener("dragover", (e) => {
-                  e.preventDefault();
-                  this.el.classList.add("border-blue-400", "bg-blue-50");
-                });
-                this.el.addEventListener("dragleave", () => {
-                  this.el.classList.remove("border-blue-400", "bg-blue-50");
-                });
-              }
-            }
-          </script>
+          <label class="block p-12 cursor-pointer hover:border-blue-400 hover:bg-blue-50" for="seath-upload">
+            <.live_file_input upload={@uploads.document} id="seath-upload" />
+            <.icon name="hero-arrow-up-tray" class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <p class="text-gray-600 mb-2">Drag and drop files here, or click to browse</p>
+            <p class="text-sm text-gray-400">PDF, PNG, JPG, TIFF, TXT — up to 50MB each</p>
+          </label>
         </div>
 
         <%!-- Upload progress --%>
