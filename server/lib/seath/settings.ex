@@ -45,7 +45,7 @@ defmodule Seath.Settings do
     result =
       case get() do
         nil ->
-          %Seath.Settings.Setting{}
+          %Seath.Settings.Setting{id: @fixed_id}
           |> Seath.Settings.Setting.changeset(attrs)
           |> Repo.insert()
 
