@@ -173,10 +173,23 @@ defmodule Seath.Workers.ClassifyWorker do
       all_corrs = Correspondents.list_correspondents()
       matched = Enum.find(all_corrs, fn c -> String.downcase(c.name) == String.downcase(corr_name) end)
 
-      case matched do
+      correspondent =
+        case matched do
+          nil ->
+            # Auto-create correspondent when LLM suggests a new one
+            case Correspondents.create_correspondent(%{name: corr_name}) do
+              {:ok, new_corr} -> new_corr
+              {:error, _} -> nil
+            end
+
+          existing ->
+            existing
+        end
+
+      case correspondent do
         nil -> doc
-        correspondent ->
-          {:ok, updated} = Documents.update_document(doc, %{correspondent_id: correspondent.id})
+        corr ->
+          {:ok, updated} = Documents.update_document(doc, %{correspondent_id: corr.id})
           updated
       end
     end
