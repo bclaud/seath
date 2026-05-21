@@ -119,6 +119,23 @@ if config_env() == :prod do
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end
 
+# Configure OCR and LLM providers based on environment variables
+ocr_provider =
+  case System.get_env("OCR_PROVIDER") do
+    "azure" -> Seath.OCR.Azure
+    "ollama" -> Seath.OCR.Ollama
+    _ -> nil
+  end
+
+llm_provider =
+  case System.get_env("LLM_PROVIDER") do
+    "ollama" -> Seath.LLM.Ollama
+    _ -> nil
+  end
+
+if ocr_provider, do: config :seath, :ocr_provider, ocr_provider
+if llm_provider, do: config :seath, :llm_provider, llm_provider
+
 config :seath, Seath.OCR.Azure,
   endpoint: System.get_env("AZURE_DI_ENDPOINT"),
   key: System.get_env("AZURE_DI_KEY")

@@ -7,6 +7,7 @@ defmodule Seath.Workers.OCRWorker do
   use Oban.Worker, queue: :ocr, max_attempts: 3
 
   alias Seath.Documents
+  require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"document_id" => id}}) do
@@ -21,6 +22,19 @@ defmodule Seath.Workers.OCRWorker do
 
       Seath.Workers.ClassifyWorker.new(%{"document_id" => document.id}) |> Oban.insert()
       :ok
+    else
+      {:error, :not_configured} ->
+        Logger.error("""
+        No OCR provider configured.
+
+        Set OCR_PROVIDER env var to one of:
+          - "azure"  (requires AZURE_DI_ENDPOINT and AZURE_DI_KEY)
+          - "ollama" (requires OLLAMA_BASE_URL, default: http://localhost:11434)
+        """)
+        {:discard, :not_configured}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

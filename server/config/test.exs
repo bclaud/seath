@@ -15,6 +15,10 @@ config :seath, Seath.Repo,
   pool_size: System.schedulers_online() * 2,
   types: Seath.PostgrexTypes
 
+# Use mock providers in test
+config :seath, :ocr_provider, Seath.OCR.Mock
+config :seath, :llm_provider, Seath.LLM.Mock
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :seath, SeathWeb.Endpoint,

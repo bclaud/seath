@@ -78,11 +78,11 @@ config :seath, :watched_folder,
   processed_subdir: "processed",
   allowed_extensions: ~w(.pdf .png .jpg .jpeg .tiff .txt)
 
-# Configure OCR provider
-config :seath, :ocr_provider, Seath.OCR.Mock
+# Configure OCR provider — set via env var or runtime config
+# Available: Seath.OCR.Azure, Seath.OCR.Ollama
 
-# Configure LLM provider
-config :seath, :llm_provider, Seath.LLM.Mock
+# Configure LLM provider — set via env var or runtime config
+# Available: Seath.LLM.Ollama
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
