@@ -24,30 +24,32 @@ defmodule SeathWeb.UploadLive do
 
   @impl true
   def handle_event("save", _params, socket) do
-    uploaded_docs =
+    File.mkdir_p!(Seath.Storage.upload_dir())
+
+    results =
       consume_uploaded_entries(socket, :document, fn %{path: path}, entry ->
-        case Seath.Documents.ingest(path, entry.client_name) do
-          {:ok, doc} -> {:ok, doc}
-          {:error, _reason} -> {:error, entry.client_name}
-        end
+        IO.inspect(path, label: "upload temp path")
+        IO.inspect(File.exists?(path), label: "temp file exists")
+
+        result = Seath.Documents.ingest(path, entry.client_name)
+        IO.inspect(result, label: "ingest result")
+        result
       end)
 
-    successful = Enum.filter(uploaded_docs, &match?({:ok, _}, &1))
-    failed = Enum.filter(uploaded_docs, &match?({:error, _}, &1))
+    IO.inspect(results, label: "consume results")
+    successes = Enum.filter(results, &match?({:ok, _}, &1))
+    failures = Enum.filter(results, &(elem(&1, 0) == :error))
 
     socket =
       socket
-      |> assign(:uploaded_docs, successful ++ socket.assigns.uploaded_docs)
-      |> put_flash(:info, "#{length(successful)} document(s) uploaded successfully")
+      |> assign(:uploaded_docs, successes ++ socket.assigns.uploaded_docs)
+      |> put_flash(:info, "#{length(successes)} document(s) uploaded")
 
-    socket =
-      if failed != [] do
-        put_flash(socket, :error, "#{length(failed)} document(s) failed to upload")
-      else
-        socket
-      end
-
-    {:noreply, socket}
+    if failures != [] do
+      {:noreply, put_flash(socket, :error, "#{length(failures)} document(s) failed to upload")}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -118,7 +120,7 @@ defmodule SeathWeb.UploadLive do
           <h2 class="text-lg font-semibold mb-4">Uploaded Documents</h2>
           <div class="space-y-2">
             <div
-              :for={{_id, doc} <- @uploaded_docs}
+              :for={{:ok, doc} <- @uploaded_docs}
               class="p-3 bg-green-50 border border-green-200 rounded-lg"
             >
               <div class="flex items-center gap-2">
