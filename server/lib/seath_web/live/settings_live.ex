@@ -13,8 +13,8 @@ defmodule SeathWeb.SettingsLive do
      |> assign(:azure_endpoint, s.azure_endpoint || "")
      |> assign(:azure_key, s.azure_key || "")
      |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
-     |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llava")
-     |> assign(:ollama_llm_model, s.ollama_llm_model || "llama3.2")
+     |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llama3.2-vision")
+     |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma3:27b")
      |> assign(:ollama_connected, false)
      |> assign(:ollama_model_available, nil)
      |> assign(:testing, false)
@@ -49,8 +49,8 @@ defmodule SeathWeb.SettingsLive do
       azure_endpoint: params["azure_endpoint"] || "",
       azure_key: params["azure_key"] || "",
       ollama_base_url: params["ollama_base_url"] || "http://localhost:11434",
-      ollama_ocr_model: params["ollama_ocr_model"] || "llava",
-      ollama_llm_model: params["ollama_llm_model"] || "llama3.2"
+      ollama_ocr_model: params["ollama_ocr_model"] || "llama3.2-vision",
+      ollama_llm_model: params["ollama_llm_model"] || "gemma3:27b"
     }
 
     case Seath.Settings.save(attrs) do
@@ -62,8 +62,8 @@ defmodule SeathWeb.SettingsLive do
          |> assign(:azure_endpoint, s.azure_endpoint || "")
          |> assign(:azure_key, s.azure_key || "")
          |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
-         |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llava")
-         |> assign(:ollama_llm_model, s.ollama_llm_model || "llama3.2")
+         |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llama3.2-vision")
+         |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma3:27b")
          |> assign(:has_db_settings, true)
          |> assign(:using_env_vars, false)
          |> put_flash(:info, "Settings saved! Env vars will no longer be used on restart.")}
@@ -189,8 +189,8 @@ defmodule SeathWeb.SettingsLive do
                 <div>
                   <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
                   <p class="text-xs text-base-content/70">
-                    Self-hosted vision model. You need a model like <strong>llava</strong>
-                    or <strong>llama3.2-vision</strong>.
+                    Self-hosted vision model. Recommended: <strong>llama3.2-vision</strong>
+                    or <strong>minicpm-v</strong>.
                   </p>
                 </div>
               </label>
@@ -278,10 +278,10 @@ defmodule SeathWeb.SettingsLive do
                 <div>
                   <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
                   <p class="text-xs text-base-content/70">
-                    Models: <strong>llama3.2</strong>
-                    (fast), <strong>llama3.1</strong>
-                    (quality), <strong>mistral</strong>
-                    (balance)
+                    Recommended: <strong>gemma3:27b</strong>
+                    (best quality), <strong>qwen3:8b</strong>
+                    (good balance), <strong>phi4</strong>
+                    (fast)
                   </p>
                 </div>
               </label>
@@ -317,8 +317,8 @@ defmodule SeathWeb.SettingsLive do
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono"
                   />
                   <p class="text-xs text-base-content/70 mt-1">
-                    Vision model. Suggestions: <strong>llava</strong>,
-                    <strong>llama3.2-vision</strong>
+                    Vision model for OCR. Recommended: <strong>llama3.2-vision</strong>,
+                    <strong>minicpm-v</strong>
                   </p>
                 </div>
                 <div>
@@ -330,8 +330,8 @@ defmodule SeathWeb.SettingsLive do
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono"
                   />
                   <p class="text-xs text-base-content/70 mt-1">
-                    For classification + chat. Suggestions: <strong>llama3.2</strong>,
-                    <strong>llama3.1</strong>
+                    For classification + chat. Recommended: <strong>gemma3:27b</strong>,
+                    <strong>qwen3:8b</strong>
                   </p>
                 </div>
               </div>
