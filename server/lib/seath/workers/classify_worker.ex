@@ -151,10 +151,23 @@ defmodule Seath.Workers.ClassifyWorker do
       all_types = DocumentTypes.list_types()
       matched = Enum.find(all_types, fn t -> String.downcase(t.name) == String.downcase(type_name) end)
 
-      case matched do
+      type =
+        case matched do
+          nil ->
+            # Auto-create document type when LLM proposes a new one
+            case DocumentTypes.create_type(%{name: type_name, description: type_name}) do
+              {:ok, new_type} -> new_type
+              {:error, _} -> nil
+            end
+
+          existing ->
+            existing
+        end
+
+      case type do
         nil -> doc
-        type ->
-          {:ok, updated} = Documents.update_document(doc, %{document_type_id: type.id})
+        t ->
+          {:ok, updated} = Documents.update_document(doc, %{document_type_id: t.id})
           updated
       end
     end

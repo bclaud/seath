@@ -123,6 +123,14 @@ defmodule SeathWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("update_type", %{"id" => id, "document_type_id" => type_id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+    type_id = if type_id == "", do: nil, else: type_id
+    {:ok, updated} = Seath.Documents.update_document(doc, %{document_type_id: type_id})
+    updated = Seath.Repo.preload(updated, [:tags, :document_type])
+    {:noreply, assign(socket, :selected_doc, updated)}
+  end
+
   def handle_event("remove_tag", %{"id" => id, "tag_id" => tag_id}, socket) do
     doc = Seath.Documents.get_document!(id)
     tag = Seath.Tags.get_tag!(tag_id)
@@ -224,9 +232,21 @@ defmodule SeathWeb.ReviewLive do
                 <label class="block text-sm font-semibold text-base-content mb-1">
                   Document Type
                 </label>
-                <p class="text-base-content">
-                  {if @selected_doc.document_type, do: @selected_doc.document_type.name, else: "None"}
-                </p>
+                <form phx-change="update_type" phx-value-id={@selected_doc.id}>
+                  <select
+                    name="document_type_id"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">None</option>
+                    <option
+                      :for={type <- @types}
+                      value={type.id}
+                      selected={@selected_doc.document_type && @selected_doc.document_type.id == type.id}
+                    >
+                      {type.name}
+                    </option>
+                  </select>
+                </form>
               </div>
 
               <%!-- Confidence --%>

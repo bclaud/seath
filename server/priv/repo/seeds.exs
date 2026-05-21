@@ -22,7 +22,8 @@ default_types = [
   %{name: "email", description: "Email correspondence or thread"},
   %{name: "letter", description: "Formal letter or correspondence"},
   %{name: "statement", description: "Bank statement, account statement, or periodic report"},
-  %{name: "report", description: "Report, analysis, or summary document"}
+  %{name: "report", description: "Report, analysis, or summary document"},
+  %{name: "comprovante", description: "Proof of payment, proof of address, or certificate"}
 ]
 
 Enum.each(default_types, fn attrs ->
