@@ -77,8 +77,8 @@ defmodule SeathWeb.ChatLive do
         <h1 class="text-2xl font-bold mb-2">Document Chat</h1>
         <p class="text-gray-700 mb-6">Ask questions about your archived documents</p>
           <div :if={@messages == []} class="flex items-center justify-center h-full">
-            <div class="text-center text-gray-500">
-              <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <div class="text-center text-gray-800">
+              <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto mb-4 text-gray-800" />
               <p class="text-lg text-gray-700">Ask a question about your documents</p>
             </div>
           </div>
@@ -93,7 +93,7 @@ defmodule SeathWeb.ChatLive do
                 <p class="text-sm text-gray-800">{msg.content}</p>
               </div>
               <div :if={msg.sources && msg.sources != []} class="mt-2 px-2">
-                <p class="text-xs text-gray-500 mb-1">Sources:</p>
+                <p class="text-xs text-gray-800 mb-1">Sources:</p>
                 <div :for={source <- msg.sources} class="flex items-center gap-1 mb-1">
                   <span class="text-xs text-blue-600 truncate">
                     {source.document.title || source.document.file_name}

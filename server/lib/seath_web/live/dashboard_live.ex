@@ -49,7 +49,7 @@ defmodule SeathWeb.DashboardLive do
           <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <a href="/upload" class="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all">
-              <.icon name="hero-arrow-up-tray" class="w-8 h-8 shrink-0 text-gray-500" />
+              <.icon name="hero-arrow-up-tray" class="w-8 h-8 shrink-0 text-gray-800" />
               <div>
                 <h4 class="text-sm font-medium text-gray-900">Upload Documents</h4>
                 <p class="text-xs text-gray-700 mt-0.5">Drop files to ingest, OCR, and classify</p>
@@ -63,14 +63,14 @@ defmodule SeathWeb.DashboardLive do
               </div>
             </a>
             <a href="/chat" class="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all">
-              <.icon name="hero-chat-bubble-left-right" class="w-8 h-8 shrink-0 text-gray-500" />
+              <.icon name="hero-chat-bubble-left-right" class="w-8 h-8 shrink-0 text-gray-800" />
               <div>
                 <h4 class="text-sm font-medium text-gray-900">Chat with Documents</h4>
                 <p class="text-xs text-gray-700 mt-0.5">Ask questions about archived documents</p>
               </div>
             </a>
             <a href="/dev/dashboard" class="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all">
-              <.icon name="hero-cog-6-tooth" class="w-8 h-8 shrink-0 text-gray-500" />
+              <.icon name="hero-cog-6-tooth" class="w-8 h-8 shrink-0 text-gray-800" />
               <div>
                 <h4 class="text-sm font-medium text-gray-900">Admin Dashboard</h4>
                 <p class="text-xs text-gray-700 mt-0.5">Oban queues, system metrics, mail preview</p>

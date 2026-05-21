@@ -197,8 +197,8 @@ defmodule SeathWeb.ReviewLive do
               </div>
             </div>
 
-            <div :if={@documents == []} class="text-center py-12 text-gray-500">
-              <.icon name="hero-inbox" class="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <div :if={@documents == []} class="text-center py-12 text-gray-800">
+              <.icon name="hero-inbox" class="w-12 h-12 mx-auto mb-3 text-gray-800" />
               <p class="text-gray-700">No documents awaiting review</p>
             </div>
           </div>
@@ -291,7 +291,7 @@ defmodule SeathWeb.ReviewLive do
               <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-800 mb-1">Extracted Text</label>
                 <div class="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                  <p class="text-sm text-gray-600 whitespace-pre-wrap">
+                  <p class="text-sm text-gray-800 whitespace-pre-wrap">
                     {if @selected_doc.ocr_text,
                       do: String.slice(@selected_doc.ocr_text, 0, 1000),
                       else: "No text extracted"}
@@ -323,8 +323,8 @@ defmodule SeathWeb.ReviewLive do
 
           <%!-- Empty state --%>
           <div :if={!@selected_doc} class="lg:col-span-2 flex items-center justify-center">
-            <div class="text-center text-gray-500">
-              <.icon name="hero-document-magnifying-glass" class="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <div class="text-center text-gray-800">
+              <.icon name="hero-document-magnifying-glass" class="w-16 h-16 mx-auto mb-4 text-gray-800" />
               <p class="text-lg text-gray-700">Select a document to review</p>
             </div>
           </div>
