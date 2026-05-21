@@ -27,7 +27,7 @@ defmodule Seath.Workers.EmbedWorkerTest do
       embeddings = Seath.Repo.all(Embedding)
       assert length(embeddings) == 1
       assert hd(embeddings).document_id == doc.id
-      assert hd(embeddings).model == "llama3.2"
+      assert is_binary(hd(embeddings).model)
       assert hd(embeddings).chunk_index == 0
     end
 

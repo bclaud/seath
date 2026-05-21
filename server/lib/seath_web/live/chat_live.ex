@@ -82,19 +82,16 @@ defmodule SeathWeb.ChatLive do
 
     case Seath.LLM.chat_with_tools(messages, Seath.LLM.Tools.tools(), []) do
       {:ok, %{tool_calls: tool_calls}} when tool_calls != [] ->
+        # LLM requested tool execution — run tools and generate final answer
         handle_tool_calls(messages, tool_calls, [], query, live_view_pid)
 
-      {:ok, %{content: content}} ->
-        # No tools needed — LLM answered directly
-        send(live_view_pid, {:stream_token, content})
-        send(live_view_pid, {:stream_complete, []})
-
-      {:error, :not_supported} ->
-        # Fallback to old flow if provider doesn't support tools
+      {:ok, _response} ->
+        # LLM answered without using tools, or returned empty tool_calls.
+        # Don't trust the answer — search documents ourselves via fallback.
         run_fallback_flow(query, live_view_pid)
 
       {:error, _reason} ->
-        # Fallback to regular chat on error
+        # Provider doesn't support tools or error occurred — use fallback
         run_fallback_flow(query, live_view_pid)
     end
   end
