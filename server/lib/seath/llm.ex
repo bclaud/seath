@@ -64,4 +64,25 @@ defmodule Seath.LLM do
       provider -> provider.chat_stream(messages, opts, stream_to)
     end
   end
+
+  @doc """
+  Performs vision-based OCR on image data using the configured LLM provider.
+
+  Takes raw image bytes and returns extracted text.
+  Returns `{:error, :not_configured}` if no LLM provider is configured
+  or if the provider does not support `ocr_vision/2`.
+  """
+  def ocr_vision(image_data, opts \\ []) do
+    case impl() do
+      nil ->
+        {:error, :not_configured}
+
+      provider ->
+        if function_exported?(provider, :ocr_vision, 2) do
+          provider.ocr_vision(image_data, opts)
+        else
+          {:error, :not_supported}
+        end
+    end
+  end
 end

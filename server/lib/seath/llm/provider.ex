@@ -46,4 +46,15 @@ defmodule Seath.LLM.Provider do
               opts :: keyword(),
               stream_to :: pid()
             ) :: {:ok, String.t()} | {:error, term()}
+
+  @doc """
+  Performs vision-based OCR on image data using the LLM's vision model.
+
+  Takes raw image bytes and returns extracted text with attention to
+  structured data (amounts, dates, invoice numbers, tax IDs, etc.).
+  """
+  @callback ocr_vision(image_data :: binary(), opts :: keyword()) ::
+              {:ok, String.t()} | {:error, term()}
+
+  @optional_callbacks ocr_vision: 2
 end

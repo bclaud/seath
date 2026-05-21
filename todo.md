@@ -70,12 +70,17 @@
 - [ ] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
 - [x] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
 - [x] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
+- [x] implement multi-step classification with separate LLM calls per field (title, tags, document_type, correspondent, involved_parties) — follows paperless-gpt approach for better quality
+- [x] add vision OCR callback to LLM provider (ocr_vision/2) — enables LLM-based OCR with structured data extraction
+- [x] add correspondent extraction to search/match existing correspondents during classification
+- [x] add involved parties extraction (named entities) during classification — enables "show me everything involving X" queries
+- [x] update OCR worker with optional vision-LLM OCR fallback — better structured data extraction for invoices/receipts
 - [ ] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
 - [ ] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
 
 ## Involved Parties — Multi-Entity Extraction
 
 - [x] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
-- [ ] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
+- [x] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
 - [ ] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
 - [ ] add search/filter by involved party name — users need to find all documents mentioning a specific person or company

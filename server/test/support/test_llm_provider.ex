@@ -34,4 +34,10 @@ defmodule Seath.TestLLMProvider do
     send(stream_to, {:stream_token, response})
     {:ok, response}
   end
+
+  @impl true
+  def ocr_vision(_image_data, _opts) do
+    {:ok,
+     "Test Invoice\nAmount: $1,234.56\nInvoice #: INV-2024-001\nDate: 2024-01-15\nVendor: Acme Corp\nTax ID: 12.345.678/0001-90"}
+  end
 end

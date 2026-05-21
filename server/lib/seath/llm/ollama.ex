@@ -25,6 +25,21 @@ defmodule Seath.LLM.Ollama do
     {base_url, model}
   end
 
+  @doc false
+  def vision_config do
+    base_url =
+      Application.get_env(:seath, __MODULE__, [])
+      |> Keyword.get(:base_url) ||
+        System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    model =
+      Application.get_env(:seath, __MODULE__, [])
+      |> Keyword.get(:vision_model) ||
+        System.get_env("OLLAMA_VISION_MODEL", "llama3.2-vision")
+
+    {base_url, model}
+  end
+
   @impl true
   def classify(text, available_tags, available_types) do
     {base_url, model} = config()
@@ -133,6 +148,42 @@ defmodule Seath.LLM.Ollama do
       {:ok, %{status: 200} = resp} ->
         full_response = stream_ndjson(resp.body, stream_to)
         {:ok, full_response}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:unexpected_response, status, body}}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, :connection_refused}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @impl true
+  def ocr_vision(image_data, opts \\ []) do
+    {base_url, model} = vision_config()
+    prompt = Keyword.get(opts, :prompt)
+
+    prompt =
+      prompt ||
+        "Just transcribe the text in this image and preserve the formatting and layout (high quality OCR). Be thorough and extract ALL text including numbers, amounts, dates, invoice numbers, tax IDs, and other structured data. Use markdown format but without a code block."
+
+    body = %{
+      model: model,
+      stream: false,
+      messages: [
+        %{
+          role: "user",
+          content: prompt,
+          images: [Base.encode64(image_data)]
+        }
+      ]
+    }
+
+    case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
+      {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
+        {:ok, String.trim(content)}
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:unexpected_response, status, body}}

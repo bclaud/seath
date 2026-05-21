@@ -43,4 +43,20 @@ defmodule Seath.LLMTest do
       assert_received {:stream_token, _token}
     end
   end
+
+  describe "ocr_vision/2" do
+    test "delegates to the configured provider" do
+      assert {:ok, text} = LLM.ocr_vision(<<0, 1, 2, 3>>)
+      assert is_binary(text)
+      assert String.contains?(text, "Invoice")
+    end
+
+    test "returns error when no provider is configured" do
+      Application.put_env(:seath, :llm_provider, nil)
+
+      assert {:error, :not_configured} = LLM.ocr_vision(<<0, 1, 2, 3>>)
+    after
+      Application.put_env(:seath, :llm_provider, Seath.LLM.Mock)
+    end
+  end
 end
