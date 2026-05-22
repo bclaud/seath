@@ -11,10 +11,54 @@ defmodule Seath.TestLLMProvider do
        title: "Test Invoice",
        document_type: "invoice",
        tags: ["invoice", "finance"],
-       confidence: 0.9,
        correspondent: "Acme Corp",
        involved_parties: [%{name: "Acme Corp", role: "sender"}]
      }}
+  end
+
+  @impl true
+  def think(_text, _opts \\ []) do
+    {:ok,
+     %{
+       reasoning: "This document is an invoice from Acme Corp. It contains financial details including amounts and dates.",
+       extracted_entities: ["Acme Corp", "João Silva"],
+       extracted_amounts: ["R$ 1.500,00"],
+       extracted_dates: ["2024-03-15"],
+       summary: "Invoice for consulting services from Acme Corp"
+     }}
+  end
+
+  @impl true
+  def classify_from_reasoning(_thinking, _text, _available_tags, _available_types, _opts \\ []) do
+    {:ok,
+     %{
+       title: "Test Invoice",
+       document_type: "invoice",
+       tags: ["invoice", "finance"],
+       correspondent: "Acme Corp",
+       involved_parties: [%{name: "Acme Corp", role: "sender"}, %{name: "João Silva", role: "recipient"}]
+     }}
+  end
+
+  @impl true
+  def verify(classification, text) do
+    text_lower = String.downcase(text)
+    flagged = []
+    verified = []
+
+    {verified, flagged} =
+      if correspondent = Map.get(classification, :correspondent) do
+        if String.contains?(text_lower, String.downcase(correspondent)) do
+          {verified ++ ["correspondent"], flagged}
+        else
+          {verified, flagged ++ [%{field: "correspondent", reason: "Not found in text"}]}
+        end
+      else
+        {verified, flagged}
+      end
+
+    passed? = flagged == []
+    {:ok, %{passed: passed?, verified_fields: verified, flagged_fields: flagged}}
   end
 
   @impl true

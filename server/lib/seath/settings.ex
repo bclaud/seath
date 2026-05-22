@@ -92,7 +92,9 @@ defmodule Seath.Settings do
 
   Sets three independent providers:
     - :ocr_provider  → used by Seath.OCR.extract/1
-    - :llm_provider  → used by Seath.LLM.classify/3, Seath.LLM.embed/1
+    - :llm_provider  → used by Seath.LLM.classify/3, Seath.LLM.think/2,
+                       Seath.LLM.classify_from_reasoning/5, Seath.LLM.verify/2,
+                       Seath.LLM.embed/1
     - :chat_provider → used by Seath.LLM.chat/2, Seath.LLM.chat_stream/3,
                        Seath.LLM.chat_with_tools/3
   """

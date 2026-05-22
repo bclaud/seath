@@ -32,7 +32,7 @@ defmodule Seath.Workers.WorkerBroadcastTest do
       {:ok, doc} = Documents.create_document(@valid_attrs)
 
       {:ok, doc} =
-        Documents.update_document(doc, %{ocr_text: "Some extracted text", status: "processing"})
+        Documents.update_document(doc, %{ocr_text: "Some Mock text from Mock Corp", status: "processing"})
 
       Seath.Workers.ClassifyWorker.new(%{"document_id" => doc.id})
       |> Oban.insert!()

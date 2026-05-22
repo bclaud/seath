@@ -8,6 +8,8 @@ defmodule SeathWeb.ReviewLive do
     types = Seath.DocumentTypes.list_types()
     correspondents = Seath.Correspondents.list_correspondents()
 
+    Phoenix.PubSub.subscribe(Seath.PubSub, "documents")
+
     {:ok,
      socket
      |> assign(:documents, documents)
@@ -60,6 +62,21 @@ defmodule SeathWeb.ReviewLive do
      |> assign(:selected_doc, nil)
      |> assign(:involved_parties, [])
      |> put_flash(:info, "Document rejected.")}
+  end
+
+  @impl true
+  def handle_event("reclassify", %{"id" => id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+    {:ok, _updated} = Seath.Documents.reclassify(doc)
+
+    updated =
+      Seath.Documents.get_document!(id)
+      |> Seath.Repo.preload([:tags, :document_type, :correspondent])
+
+    {:noreply,
+     socket
+     |> assign(:selected_doc, updated)
+     |> put_flash(:info, "Reclassification started for \"#{updated.title || updated.file_name}\".")}
   end
 
   @impl true
@@ -202,6 +219,27 @@ defmodule SeathWeb.ReviewLive do
   end
 
   @impl true
+  def handle_info({:document_updated, %{id: id, status: status}}, socket) do
+    socket =
+      if socket.assigns.selected_doc && socket.assigns.selected_doc.id == id do
+        if status == "awaiting_review" do
+          doc =
+            Seath.Documents.get_document!(id)
+            |> Seath.Repo.preload([:tags, :document_type, :correspondent])
+
+          assign(socket, :selected_doc, doc)
+        else
+          assign(socket, :selected_doc, %{socket.assigns.selected_doc | status: status})
+        end
+      else
+        socket
+      end
+
+    documents = Seath.Documents.list_by_status("awaiting_review")
+    {:noreply, assign(socket, :documents, documents)}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_page={:review} review_count={length(@documents)}>
@@ -311,7 +349,7 @@ defmodule SeathWeb.ReviewLive do
               </div>
 
               <%!-- Confidence --%>
-              <div :if={@selected_doc.confidence} class="mb-6">
+              <div :if={@selected_doc.confidence} class="mb-3">
                 <label class="block text-sm font-semibold text-base-content mb-1">
                   Classification Confidence
                 </label>
@@ -340,6 +378,35 @@ defmodule SeathWeb.ReviewLive do
                   ]}>
                     {Float.round(@selected_doc.confidence * 100, 1)}%
                   </span>
+                </div>
+              </div>
+
+              <%!-- Classification attempts --%>
+              <div :if={@selected_doc.classification_attempts && @selected_doc.classification_attempts > 0} class="mb-3">
+                <span class="text-xs text-base-content/70">
+                  Attempt {@selected_doc.classification_attempts}
+                </span>
+              </div>
+
+              <%!-- Verification warnings --%>
+              <div
+                :if={
+                  @selected_doc.verification_data &&
+                  @selected_doc.verification_data["passed"] == false &&
+                  length(@selected_doc.verification_data["flagged_fields"] || []) > 0
+                }
+                class="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+              >
+                <div class="flex items-start gap-2">
+                  <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p class="text-sm font-medium text-yellow-800">Verification Flags</p>
+                    <ul class="mt-1 text-sm text-yellow-700 list-disc list-inside">
+                      <li :for={field <- @selected_doc.verification_data["flagged_fields"]}>
+                        {field} not found in document text
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
 
@@ -460,6 +527,28 @@ defmodule SeathWeb.ReviewLive do
 
               <%!-- Actions --%>
               <div class="flex gap-3 pt-4 border-t">
+                <button
+                  id="reclassify-btn"
+                  phx-click="reclassify"
+                  phx-value-id={@selected_doc.id}
+                  disabled={@selected_doc.status == "processing"}
+                  class={[
+                    "flex-1 py-3 px-6 rounded-lg font-medium transition-colors border",
+                    if @selected_doc.status == "processing" do
+                      "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                    else
+                      "border-gray-300 bg-white text-base-content hover:bg-gray-50"
+                    end
+                  ]}
+                >
+                  <%= if @selected_doc.status == "processing" do %>
+                    <.icon name="hero-arrow-path" class="w-5 h-5 inline mr-1 animate-spin" />
+                    Reclassifying...
+                  <% else %>
+                    <.icon name="hero-arrow-clockwise" class="w-5 h-5 inline mr-1" />
+                    Reclassify
+                  <% end %>
+                </button>
                 <button
                   id="approve-btn"
                   phx-click="approve"

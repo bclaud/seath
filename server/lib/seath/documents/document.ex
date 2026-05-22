@@ -31,6 +31,9 @@ defmodule Seath.Documents.Document do
     field :error_message, :string
     field :status, :string, default: "pending"
     field :archived_at, :utc_datetime
+    field :llm_reasoning, :string
+    field :verification_data, :map, default: %{}
+    field :classification_attempts, :integer, default: 0
 
     belongs_to :document_type, Seath.DocumentTypes.DocumentType
     belongs_to :correspondent, Seath.Correspondents.Correspondent
@@ -57,7 +60,10 @@ defmodule Seath.Documents.Document do
       :status,
       :archived_at,
       :document_type_id,
-      :correspondent_id
+      :correspondent_id,
+      :llm_reasoning,
+      :verification_data,
+      :classification_attempts
     ])
     |> validate_required([:file_path, :file_name, :file_type, :file_size])
     |> validate_number(:file_size, greater_than: 0)

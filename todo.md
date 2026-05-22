@@ -78,6 +78,17 @@
 - [x] allow ClassifyWorker to create new DocumentType when LLM proposes an unknown type — prevents useful classifications from being silently dropped
 - [x] add correspondent extraction to LLM classification prompt — correspondent field exists but pipeline never populates it
 
+## Classification Quality — Thinking Loop & Accuracy Improvements
+
+- [x] [high] add chain-of-thought "thinking" step before structured classification — small models produce better JSON when they reason first in natural language
+- [x] [high] split classification into extract-then-classify two-step pipeline — separate entity extraction from categorization to reduce per-call cognitive load
+- [x] add a verification pass after classification that cross-checks results against document text — catches hallucinated correspondents, wrong types, and phantom tags
+- [x] replace self-reported confidence with heuristic confidence scoring based on match quality — LLM self-confidence is uncalibrated and misleading
+- [x] increase or chunk the 4,000-char text truncation limit for classification — long contracts and reports lose critical info from later pages
+- [x] deduplicate and normalize entity names before creating tags/types/correspondents — prevents "Empresa X" vs "EMPRESA X" proliferation in the archive
+- [x] add low-confidence auto-reclassification with a different prompt or higher temperature — gives borderline documents a second chance before human review
+- [x] [high] expose a "reclassify" action in the review UI — lets reviewers trigger a fresh classification attempt with one click instead of editing every field
+
 ## Involved Parties — Multi-Entity Extraction
 
 - [x] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent

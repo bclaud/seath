@@ -1,33 +1,28 @@
 # Tasks
 
-_Last updated: 2026-05-20_
+_Last updated: 2026-05-22_
 
 ## In Progress
 
-- [ ] **[frontend] Build RAG chat LiveView with source citations** — @frontend-specialist
-  Depends on: embeddings ✓. Create `SeathWeb.ChatLive` with message history, query input, and response display. On submit: embed the query text, find similar docs via `Seath.Embeddings.similarity_search/2`, send context + query to LLM (using `Seath.LLM.classify/3` won't work for chat — need a `chat/2` callback), show answer with cited document titles.
-  Acceptance: chat UI renders, queries return answers with cited documents, tests pass.
-
-- [ ] **[server] Add watched folder for auto-import** — @server-specialist
-  Create a periodic Oban worker that polls a configurable directory for new files, ingests them via `Seath.Documents.ingest/2`, and moves processed files to a subdirectory.
-  Acceptance: files dropped in watched folder are auto-ingested, tests pass.
-
-- [ ] **[server] Create Correspondent schema** — @server-specialist
-  Migration for `correspondents` table (name, color), add `correspondent_id` to documents. Update Document schema and context. Update review LiveView to display/edit correspondent.
-  Acceptance: migration runs, schema compiles, tests pass.
+_No tasks in progress._
 
 ## Backlog
 
-- [ ] **[server] Stream LLM chat responses token-by-token** — @server-specialist
-  Depends on: chat LiveView. Modify LLM provider behaviours to support streaming responses via `GenServer`/`Phoenix.PubSub`. Update `ChatLive` to stream tokens as they arrive.
-  Acceptance: tokens appear incrementally in chat UI, tests pass.
-
-- [ ] **[frontend] Add saved searches** — @frontend-specialist
-  Depends on: full-text search ✓. Create saved searches UI with name, tag/type/date filters. Store in `saved_searches` table.
-  Acceptance: users can save and load searches, tests pass.
+_No pending tasks — backlog is complete._
 
 ## Completed
 
-- [x] Foundation phase (7 items) — 2026-05-20
-- [x] Core Pipeline phase (7 items) — 2026-05-20
-- [x] Batch 1: PubSub, pgvector/embeddings, archival rules — 2026-05-20
+- [x] **[server] Core thinking loop & pipeline improvements** — 2026-05-22
+  All 7 server-side items implemented (222 tests, 0 failures):
+  - Chain-of-thought "thinking" step (`think/2` callback)
+  - Extract-then-classify two-step pipeline (`classify_from_reasoning/4`)
+  - Verification pass (`verify/2` callback) — cross-checks entity grounding
+  - Heuristic confidence scoring (5-factor model, no LLM self-report)
+  - Text chunking for docs > 8,000 chars (6k chunks, 500-char overlap)
+  - Entity name dedup/normalization (Levenshtein fuzzy matching)
+  - Low-confidence auto-reclassification (retry with different prompt/temperature)
+  - New migration: `add_classification_quality_fields` (llm_reasoning, verification_data, classification_attempts)
+  - Added `Seath.Documents.reclassify/1` for frontend integration
+
+- [x] **[frontend] Add "Reclassify" button to review UI** — 2026-05-22
+  Added Reclassify button to review LiveView with PubSub subscription for real-time progress. Displays classification attempts, verification warnings (flagged fields), and heuristic confidence. Button disables during processing with spinner. 223 tests, 0 failures.

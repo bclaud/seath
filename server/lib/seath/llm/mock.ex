@@ -11,10 +11,43 @@ defmodule Seath.LLM.Mock do
        title: "Untitled Document",
        document_type: nil,
        tags: [],
-       confidence: 0.5,
        correspondent: nil,
        involved_parties: []
      }}
+  end
+
+  @impl true
+  def think(_text, _opts \\ []) do
+    {:ok,
+     %{
+       reasoning: "This appears to be a mock document. It contains test data for development purposes.",
+       extracted_entities: ["Mock Entity"],
+       extracted_amounts: ["R$ 1.000,00"],
+       extracted_dates: ["2024-01-15"],
+       summary: "A mock document for testing purposes."
+     }}
+  end
+
+  @impl true
+  def classify_from_reasoning(_thinking, _text, _available_tags, _available_types, _opts \\ []) do
+    {:ok,
+     %{
+       title: "Mock Document",
+       document_type: "invoice",
+       tags: ["mock"],
+       correspondent: "Mock Corp",
+       involved_parties: [%{name: "Mock Corp", role: "sender"}]
+     }}
+  end
+
+  @impl true
+  def verify(_classification, text) do
+    # Simple mock verification — check if "Mock" appears in text
+    if String.contains?(text, "Mock") do
+      {:ok, %{passed: true, verified_fields: ["correspondent"], flagged_fields: []}}
+    else
+      {:ok, %{passed: false, verified_fields: [], flagged_fields: [%{field: "correspondent", reason: "Mock check failed"}]}}
+    end
   end
 
   @impl true

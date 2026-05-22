@@ -237,6 +237,36 @@ defmodule Seath.Documents do
   end
 
   @doc """
+  Re-runs classification for a document that's awaiting review.
+  Resets the document to processing, clears previous classification data,
+  and enqueues a new ClassifyWorker job.
+  """
+  def reclassify(%Document{} = document) do
+    with {:ok, updated} <-
+           document
+           |> Document.changeset(%{
+             status: "processing",
+             llm_reasoning: nil,
+             verification_data: %{},
+             classification_attempts: 0,
+             error_message: nil
+           })
+           |> Repo.update() do
+      %{document_id: updated.id}
+      |> Seath.Workers.ClassifyWorker.new()
+      |> Oban.insert()
+
+      Phoenix.PubSub.broadcast(
+        Seath.PubSub,
+        "documents",
+        {:document_updated, %{id: updated.id, status: "processing"}}
+      )
+
+      {:ok, updated}
+    end
+  end
+
+  @doc """
   Searches documents by full-text search over title, OCR text, and file name.
 
   Uses PostgreSQL tsvector/tsquery for ranked full-text search.

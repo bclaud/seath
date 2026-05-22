@@ -15,7 +15,7 @@ defmodule Seath.LLMTest do
       assert result.title == "Untitled Document"
       assert result.document_type == nil
       assert result.tags == []
-      assert result.confidence == 0.5
+      assert result.correspondent == nil
     end
   end
 

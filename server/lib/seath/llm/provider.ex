@@ -10,7 +10,22 @@ defmodule Seath.LLM.Provider do
           title: String.t(),
           document_type: String.t() | nil,
           tags: [String.t()],
-          confidence: float()
+          correspondent: String.t() | nil,
+          involved_parties: [map()]
+        }
+
+  @type thinking_result :: %{
+          reasoning: String.t(),
+          extracted_entities: [String.t()],
+          extracted_amounts: [String.t()],
+          extracted_dates: [String.t()],
+          summary: String.t()
+        }
+
+  @type verification_result :: %{
+          passed: boolean(),
+          verified_fields: [String.t()],
+          flagged_fields: [%{field: String.t(), reason: String.t()}]
         }
 
   @type chat_message :: %{role: String.t(), content: String.t()}
@@ -41,6 +56,38 @@ defmodule Seath.LLM.Provider do
               opts :: keyword()
             ) ::
               {:ok, classification_result()} | {:error, term()}
+
+  @doc """
+  Two-phase classification: Phase 1 — think.
+  Takes OCR text and returns natural language reasoning with structured extractions.
+  """
+  @callback think(
+              text :: String.t(),
+              opts :: keyword()
+            ) :: {:ok, thinking_result()} | {:error, term()}
+
+  @doc """
+  Two-phase classification: Phase 2 — classify from reasoning.
+  Takes the thinking output + OCR text + available tags/types + similar document context
+  and produces the structured classification.
+  """
+  @callback classify_from_reasoning(
+              thinking :: thinking_result(),
+              text :: String.t(),
+              available_tags :: [String.t()],
+              available_types :: [String.t()],
+              opts :: keyword()
+            ) :: {:ok, classification_result()} | {:error, term()}
+
+  @doc """
+  Verifies a classification result against the original document text.
+  Cross-checks that entities mentioned in the classification actually appear
+  in the document text.
+  """
+  @callback verify(
+              classification :: classification_result(),
+              text :: String.t()
+            ) :: {:ok, verification_result()} | {:error, term()}
 
   @callback embed(text :: String.t()) :: {:ok, [float()]} | {:error, term()}
 

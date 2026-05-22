@@ -22,10 +22,10 @@ defmodule Seath.Workers.ClassifyWorkerTest do
     test "classifies document with OCR text and transitions to awaiting_review", %{
       document: document
     } do
-      # Give the document OCR text and set status to processing (as OCR worker would)
+      # Give the document OCR text including text that matches mock entity output
       {:ok, document} =
         Documents.update_document(document, %{
-          ocr_text: "Some extracted text",
+          ocr_text: "Some Mock Corp extracted text with amounts",
           status: "processing"
         })
 
@@ -35,8 +35,9 @@ defmodule Seath.Workers.ClassifyWorkerTest do
       Oban.drain_queue(queue: :classify)
 
       updated = Documents.get_document!(document.id)
-      assert updated.title == "Untitled Document"
+      assert updated.title == "Mock Document"
       assert updated.status == "awaiting_review"
+      assert updated.confidence > 0
     end
 
     test "returns error when document does not exist" do
@@ -78,7 +79,10 @@ defmodule Seath.Workers.ClassifyWorkerTest do
       Application.put_env(:seath, :llm_provider, Seath.TestLLMProvider)
 
       {:ok, document} =
-        Documents.update_document(document, %{ocr_text: "Invoice text", status: "processing"})
+        Documents.update_document(document, %{
+          ocr_text: "Invoice text from Acme Corp with amount R$ 1.500,00",
+          status: "processing"
+        })
 
       ClassifyWorker.new(%{"document_id" => document.id})
       |> Oban.insert!()
@@ -105,7 +109,10 @@ defmodule Seath.Workers.ClassifyWorkerTest do
       Application.put_env(:seath, :llm_provider, Seath.TestLLMProvider)
 
       {:ok, document} =
-        Documents.update_document(document, %{ocr_text: "Invoice text", status: "processing"})
+        Documents.update_document(document, %{
+          ocr_text: "Invoice text from Acme Corp with amount R$ 1.500,00",
+          status: "processing"
+        })
 
       ClassifyWorker.new(%{"document_id" => document.id})
       |> Oban.insert!()

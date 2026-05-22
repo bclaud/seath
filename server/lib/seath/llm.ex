@@ -44,6 +44,47 @@ defmodule Seath.LLM do
   end
 
   @doc """
+  Phase 1 of two-phase classification: think/reason about the document.
+
+  Returns natural language reasoning with structured extractions.
+  See `c:Seath.LLM.Provider.think/2` for details.
+  Returns `{:error, :not_configured}` if no LLM provider is configured.
+  """
+  def think(text, opts \\ []) do
+    case impl() do
+      nil -> {:error, :not_configured}
+      provider -> provider.think(text, opts)
+    end
+  end
+
+  @doc """
+  Phase 2 of two-phase classification: classify from reasoning.
+
+  Uses the thinking output and extracted entities to produce structured
+  classification. See `c:Seath.LLM.Provider.classify_from_reasoning/4` for details.
+  Returns `{:error, :not_configured}` if no LLM provider is configured.
+  """
+  def classify_from_reasoning(thinking, text, available_tags, available_types, opts \\ []) do
+    case impl() do
+      nil -> {:error, :not_configured}
+      provider -> provider.classify_from_reasoning(thinking, text, available_tags, available_types, opts)
+    end
+  end
+
+  @doc """
+  Verifies a classification result against the original document text.
+
+  Cross-checks entities mentioned in classification against the document text.
+  Returns `{:ok, verification_result}` or `{:error, :not_configured}`.
+  """
+  def verify(classification, text) do
+    case impl() do
+      nil -> {:error, :not_configured}
+      provider -> provider.verify(classification, text)
+    end
+  end
+
+  @doc """
   Generates an embedding vector using the configured LLM provider.
 
   See `c:Seath.LLM.Provider.embed/1` for details.
