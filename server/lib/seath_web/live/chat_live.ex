@@ -180,16 +180,20 @@ defmodule SeathWeb.ChatLive do
           "After receiving search results, reason about which documents are relevant " <>
           "and explain your reasoning briefly. " <>
           "Always cite specific documents by title in your answer. " <>
-          "If the search results don't contain the information needed, say so clearly."
+          "If the search results don't contain the information needed, say so clearly. " <>
+          "Respond in the same language as the user's question."
     }
 
     [system_msg | history]
   end
 
   defp build_chat_context(query) do
+    # Extract meaningful keywords for broader search (instead of passing the raw query as a regex)
+    search_query = extract_search_query(query)
+
     # Step 1: Try grep-based retrieval first (exact match for names, IDs, dates)
     grep_results =
-      Seath.Retrieval.search(query, limit: 3, max_docs: 3, include_docs: true, status: "archived")
+      Seath.Retrieval.search(search_query, limit: 3, max_docs: 3, include_docs: true, status: "archived")
 
     grep_count = length(grep_results)
 
@@ -236,7 +240,8 @@ defmodule SeathWeb.ChatLive do
                     "Review the context documents, identify which ones are relevant to the question, " <>
                     "then answer based only on the provided context. " <>
                     "Cite specific documents by title in your answer. " <>
-                    "If the context doesn't contain relevant information, say so clearly."
+                    "If the context doesn't contain relevant information, say so clearly. " <>
+                    "Respond in the same language as the user's question."
               },
               %{
                 role: "user",
@@ -261,7 +266,8 @@ defmodule SeathWeb.ChatLive do
             content:
               "You are a document Q&A assistant. I searched the document archive but found no matching documents. " <>
                 "Tell the user honestly that no documents were found matching their query. " <>
-                "Suggest they try different search terms or check if the documents are archived."
+                "Suggest they try different search terms or check if the documents are archived. " <>
+                "Respond in the same language as the user's question."
           },
           %{role: "user", content: query}
         ]
@@ -282,6 +288,28 @@ defmodule SeathWeb.ChatLive do
   end
 
   defp parse_arguments(_arguments), do: %{}
+
+  defp extract_search_query(query) do
+    # Portuguese + English stopwords — words unlikely to be document content
+    stopwords =
+      ~w(a o e em de da do das dos para por com sem seu sua seus suas
+         ele ela eles elas isso aquilo este esta estes estas esse essa esses essas
+         um uma uns umas na no nas nos pelo pela pelos pelas aos as
+         the and or of to in for is it on at by with from be are was were
+         has have had not but what which who whom this that these those
+         me my mine you your yours we our ours they their them its)
+      |> MapSet.new()
+
+    query
+    |> String.downcase()
+    |> String.split(~r/[^a-z0-9\p{L}]+/u, trim: true)
+    |> Enum.reject(fn word -> MapSet.member?(stopwords, word) or String.length(word) < 2 end)
+    |> Enum.uniq()
+    |> case do
+      [] -> query
+      keywords -> Enum.join(keywords, "|")
+    end
+  end
 
   @impl true
   def render(assigns) do
