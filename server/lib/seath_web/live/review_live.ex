@@ -209,6 +209,30 @@ defmodule SeathWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("create_type", %{"id" => id, "name" => name}, socket) when name != "" do
+    name = String.trim(name)
+
+    type =
+      case Seath.DocumentTypes.get_type_by_name(name) do
+        nil -> {:ok, t} = Seath.DocumentTypes.create_type(%{name: name}); t
+        existing -> existing
+      end
+
+    doc = Seath.Documents.get_document!(id)
+    {:ok, updated} = Seath.Documents.update_document(doc, %{document_type_id: type.id})
+    updated = Seath.Repo.preload(updated, [:tags, :document_type, :correspondent])
+    types = Seath.DocumentTypes.list_types()
+
+    {:noreply,
+     socket
+     |> assign(:selected_doc, updated)
+     |> assign(:types, types)
+     |> put_flash(:info, "Type '#{type.name}' created and assigned.")}
+  end
+
+  def handle_event("create_type", _params, socket), do: {:noreply, socket}
+
+  @impl true
   def handle_event("update_correspondent", %{"id" => id, "correspondent_id" => corr_id}, socket) do
     doc = Seath.Documents.get_document!(id)
     corr_id = if corr_id == "", do: nil, else: corr_id
@@ -365,6 +389,24 @@ defmodule SeathWeb.ReviewLive do
                       {type.name}
                     </option>
                   </select>
+                </form>
+                <form
+                  phx-submit="create_type"
+                  phx-value-id={@selected_doc.id}
+                  class="flex gap-1 mt-2"
+                >
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="New type..."
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    Create
+                  </button>
                 </form>
               </div>
 
@@ -536,12 +578,12 @@ defmodule SeathWeb.ReviewLive do
                 <label class="block text-sm font-semibold text-base-content mb-1">
                   Extracted Text
                 </label>
-                <div class="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                  <p class="text-sm text-base-content/90 whitespace-pre-wrap">
+                <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto font-mono text-xs leading-relaxed">
+                  <pre class="whitespace-pre-wrap text-base-content/90">
                     {if @selected_doc.ocr_text,
-                      do: String.slice(@selected_doc.ocr_text, 0, 1000),
+                      do: @selected_doc.ocr_text,
                       else: "No text extracted"}
-                  </p>
+                  </pre>
                 </div>
               </div>
 
