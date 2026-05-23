@@ -2,33 +2,20 @@ defmodule Seath.OCR.Ollama do
   @moduledoc """
   Ollama OCR provider.
 
-  Uses a vision model (default: glm-ocr, fallback: llama3.2-vision) for
-  high-quality text extraction. For PDFs, extracts digital text via
-  `pdftotext` AND renders pages to images for vision OCR, then merges
-  both results — ensuring text in embedded images is never missed.
+  Uses a vision model for text extraction — configured explicitly via
+  Settings or OLLAMA_OCR_MODEL env var (default: "llava").
+  Users should pull a capable vision model:
+    ollama pull llama3.2-vision   (good all-around)
+    ollama pull qwen2.5-vl:7b     (excellent OCR)
+    ollama pull glm-ocr           (dedicated OCR model)
 
-  This approach differentiates Seath from Paperless (which uses Tesseract):
-  vision AI understands document context, handles complex layouts, and
-  accurately reads text that traditional OCR struggles with.
-
-  Requires a running Ollama instance with a vision model pulled.
-  `pdftotext` and `pdftoppm` come from poppler-utils.
+  For PDFs, extracts digital text via pdftotext AND renders pages to
+  images for vision OCR, then merges both results — ensuring text in
+  embedded images (like scanned CNH pasted into a document) is captured.
   """
   @behaviour Seath.OCR.Provider
 
   @image_extensions ~w(.png .jpg .jpeg .tiff .bmp)
-
-  @doc """
-  Best available models for OCR, in preference order.
-  These are known to produce excellent text extraction results.
-
-  Recommended (ollama pull <name>):
-    qwen2.5-vl:7b   — current best open-source for OCR
-    llama3.2-vision  — strong all-around vision model
-    glm-ocr          — dedicated OCR model
-    minicpm-v        — good OCR in a smaller package
-  """
-  @preferred_models ~w(qwen2.5-vl llama3.2-vision glm-ocr minicpm-v gemma3)
 
   @impl true
   def extract(file_path) do
@@ -40,8 +27,7 @@ defmodule Seath.OCR.Ollama do
 
     model =
       Keyword.get(config, :model) ||
-        System.get_env("OLLAMA_OCR_MODEL") ||
-        first_available_model(base_url)
+        System.get_env("OLLAMA_OCR_MODEL", "llava")
 
     ext = file_path |> Path.extname() |> String.downcase()
 
@@ -50,33 +36,6 @@ defmodule Seath.OCR.Ollama do
     else
       extract_pdf(file_path, base_url, model)
     end
-  end
-
-  # Pick the first model from @preferred_models that's available in Ollama.
-  # Strips the :tag suffix since Ollama returns "model:latest" but we
-  # match against bare names like "glm-ocr".
-  defp first_available_model(base_url) do
-    available =
-      base_url
-      |> list_ollama_models()
-      |> Enum.map(fn name -> name |> String.split(":") |> hd() end)
-      |> MapSet.new()
-
-    Enum.find_value(@preferred_models, fn model ->
-      if MapSet.member?(available, model), do: model
-    end) || "llava"
-  end
-
-  defp list_ollama_models(base_url) do
-    case Req.get("#{base_url}/api/tags", receive_timeout: 2000) do
-      {:ok, %{status: 200, body: %{"models" => models}}} ->
-        Enum.map(models, & &1["name"])
-
-      _ ->
-        []
-    end
-  rescue
-    _ -> []
   end
 
   # --- Image extraction ---
