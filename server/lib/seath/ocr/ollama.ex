@@ -41,14 +41,42 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
-  # For PDFs: try pdftotext first, fall back to vision OCR
+  # For PDFs: extract digital text first, then check if pages are missing text.
+  # If pdftotext returns very little text relative to page count, the PDF likely
+  # has scanned/image pages — run vision OCR on those pages and merge.
   defp extract_pdf(file_path, base_url, model) do
-    case extract_pdf_text(file_path) do
-      {:ok, text} when text != "" and text != nil ->
+    digital = extract_pdf_text(file_path)
+
+    case {digital, get_pdf_page_count(file_path)} do
+      {{:ok, text}, {:ok, page_count}} when text != "" and byte_size(text) < page_count * 100 ->
+        # Low text density — pages likely contain images. Run vision OCR and merge.
+        case extract_pdf_via_vision(file_path, base_url, model) do
+          {:ok, vision} ->
+            {:ok, "#{text}\n\n--- Additional OCR-extracted content ---\n\n#{vision}"}
+          {:error, _} ->
+            {:ok, text}
+        end
+
+      {{:ok, text}, _} when text != "" ->
+        # Plenty of digital text — use it directly
         {:ok, text}
 
       _ ->
+        # No digital text at all — use vision OCR
         extract_pdf_via_vision(file_path, base_url, model)
+    end
+  end
+
+  defp get_pdf_page_count(file_path) do
+    case System.cmd("pdfinfo", [file_path]) do
+      {output, 0} ->
+        case Regex.run(~r/Pages:\s+(\d+)/, output) do
+          [_, pages] -> {:ok, String.to_integer(pages)}
+          nil -> {:error, :no_page_count}
+        end
+
+      _ ->
+        {:error, :pdfinfo_failed}
     end
   end
 
