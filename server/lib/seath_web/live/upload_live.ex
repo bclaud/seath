@@ -93,6 +93,23 @@ defmodule SeathWeb.UploadLive do
   end
 
   @impl true
+  def handle_event("delete_document", %{"id" => id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+
+    case Seath.Documents.delete_document(doc) do
+      {:ok, _deleted} ->
+        in_flight = Enum.reject(socket.assigns.in_flight, &(&1.id == id))
+
+        {:noreply,
+         assign(socket, :in_flight, in_flight)
+         |> put_flash(:info, "Document deleted")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to delete: #{reason}")}
+    end
+  end
+
+  @impl true
   def handle_info({:document_updated, updated}, socket) do
     in_flight =
       Enum.map(socket.assigns.in_flight, fn
@@ -210,7 +227,17 @@ defmodule SeathWeb.UploadLive do
                     {doc.title || doc.file_name}
                   </span>
                 </div>
-                <.status_badge status={doc.status} />
+                <div class="flex items-center gap-2 shrink-0">
+                  <.status_badge status={doc.status} />
+                  <button
+                    phx-click="delete_document"
+                    phx-value-id={doc.id}
+                    class="text-gray-400 hover:text-red-600 transition-colors p-1"
+                    title="Delete document"
+                  >
+                    <.icon name="hero-trash" class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div :if={doc.status != "error"} class="mt-3">

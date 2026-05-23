@@ -116,6 +116,25 @@ defmodule Seath.Documents do
   end
 
   @doc """
+  Deletes a document and cleans up all associated files and records.
+
+  Removes: the file from storage, OCR text file, embeddings,
+  involved parties, tag associations, and the database record.
+  Returns `{:ok, document}` or `{:error, reason}`.
+  """
+  def delete_document(%Document{} = document) do
+    # Clean up associated records and files
+    Seath.InvolvedParties.delete_for_document(document.id)
+    Seath.Embeddings.delete_for_document(document.id)
+    Storage.delete(document.file_path)
+    Storage.delete_ocr_text(document.id)
+
+    # Remove tag associations (join table) and delete the document
+    document = Repo.preload(document, [:tags])
+    Repo.delete(document)
+  end
+
+  @doc """
   Ingests a document from a temp file path.
 
   Validates file type and size, stores the file via `Seath.Storage`,

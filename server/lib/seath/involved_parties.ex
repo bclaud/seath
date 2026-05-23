@@ -36,6 +36,15 @@ defmodule Seath.InvolvedParties do
   end
 
   @doc """
+  Deletes all involved parties for a given document.
+  Used when purging a document from the system.
+  """
+  def delete_for_document(document_id) do
+    from(ip in InvolvedParty, where: ip.document_id == ^document_id)
+    |> Repo.delete_all()
+  end
+
+  @doc """
   Creates an involved party.
   """
   def create_involved_party(attrs \\ %{}) do
