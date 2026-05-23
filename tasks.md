@@ -8,7 +8,7 @@ _No tasks in progress._
 
 ## Backlog
 
-_No pending tasks — backlog is complete._
+_No pending tasks._
 
 ## Completed
 

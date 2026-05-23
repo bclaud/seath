@@ -105,7 +105,7 @@ defmodule Seath.LLM.Ollama do
     {
       "title": "a concise, descriptive title for this document (max 80 chars, in the document's language)",
       "document_type": "the single best matching type from <available_document_types>, or null if none match. Be sure to match: invoices/notas fiscais → invoice, emails → email, contracts → contract, etc.",
-      "tags": ["only tags from <available_tags> that clearly apply — be selective"],
+      "tags": ["REQUIRED: propose 2-5 tags. Start with best matches from <available_tags>, but feel free to suggest NEW tags if none fit perfectly. More tags = better retrieval. Include the most specific tags possible."],
       "correspondent": "the main sender or issuing company/person of this document, or null if unclear. Use a short, clean name without legal suffixes like Ltda, S.A., GmbH",
       "involved_parties": [{"name": "Entity Name", "role": "sender or recipient or subject or other"}]
     }
@@ -249,7 +249,7 @@ defmodule Seath.LLM.Ollama do
     {
       "title": "a concise, descriptive title for this document (max 80 chars, in the document's language)",
       "document_type": "the single best matching type from <available_document_types>, or null if none match. Be sure to match: invoices/notas fiscais → invoice, emails → email, contracts → contract, etc.",
-      "tags": ["only tags from <available_tags> that clearly apply — be selective"],
+      "tags": ["REQUIRED: propose 2-5 tags. Start with best matches from <available_tags>, but feel free to suggest NEW tags if none fit perfectly. More tags = better retrieval. Include the most specific tags possible."],
       "correspondent": "the main sender or issuing company/person of this document, or null if unclear. Use a short, clean name without legal suffixes like Ltda, S.A., GmbH",
       "involved_parties": [{"name": "Entity Name", "role": "sender or recipient or subject or other"}]
     }
