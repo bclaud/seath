@@ -89,9 +89,22 @@
 - [x] add low-confidence auto-reclassification with a different prompt or higher temperature — gives borderline documents a second chance before human review
 - [x] [high] expose a "reclassify" action in the review UI — lets reviewers trigger a fresh classification attempt with one click instead of editing every field
 
+## Classification Tuning — Tag & Metadata Generosity
+
+- [x] [quick win] update classification prompts to encourage proposing new tags beyond the available list — LLM is told "only from available tags, be selective" which suppresses useful new tags
+- [x] adjust tag instructions to prefer more tags over fewer — under-tagging hurts retrieval more than over-tagging hurts archive hygiene
+
 ## Involved Parties — Multi-Entity Extraction
 
 - [x] [high] create InvolvedParty schema with name, role, and document association — real documents mention multiple people/entities, not just one correspondent
 - [x] extract all named entities (people, companies, organizations) from document text during classification — enables "show me everything involving X" queries
 - [x] add involved parties display to document review UI — reviewer should see and correct extracted entities before archiving
 - [x] add search/filter by involved party name — users need to find all documents mentioning a specific person or company
+
+## Bugs — Upload & Ingestion
+
+- [x] [high] gate submit button on all upload entries being done — show "Uploading…" until every file's progress reaches 100%
+- [x] guard `consume_uploaded_entries` behind explicit `done?` check — prevents silent `ArgumentError` crash on multi-file submit
+- [x] add `content_hash` to Document schema with SHA-256 computation during ingest — enables duplicate detection without full re-scan
+- [x] check hash against existing documents and surface duplicate warnings in upload UI — prevents archive bloat from re-uploads
+- [x] add DB index on `content_hash` — fast lookup needed for real-time dedup during upload

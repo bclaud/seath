@@ -9,6 +9,7 @@ defmodule Seath.Documents.Document do
           file_name: String.t(),
           file_type: String.t(),
           file_size: integer(),
+          content_hash: String.t() | nil,
           ocr_text: String.t() | nil,
           status: String.t(),
           archived_at: DateTime.t() | nil,
@@ -26,6 +27,7 @@ defmodule Seath.Documents.Document do
     field :file_name, :string
     field :file_type, :string
     field :file_size, :integer
+    field :content_hash, :string
     field :ocr_text, :string
     field :confidence, :float
     field :error_message, :string
@@ -54,6 +56,7 @@ defmodule Seath.Documents.Document do
       :file_name,
       :file_type,
       :file_size,
+      :content_hash,
       :ocr_text,
       :confidence,
       :error_message,

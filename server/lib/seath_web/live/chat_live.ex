@@ -175,9 +175,12 @@ defmodule SeathWeb.ChatLive do
       role: "system",
       content:
         "You are a document Q&A assistant with access to search tools. " <>
-          "Use the available tools to find relevant documents before answering. " <>
-          "When you use a tool, wait for the results before formulating your answer. " <>
-          "Be concise and cite your sources."
+          "Think step by step: first analyze what the user is asking, " <>
+          "then decide which search tool to use. " <>
+          "After receiving search results, reason about which documents are relevant " <>
+          "and explain your reasoning briefly. " <>
+          "Always cite specific documents by title in your answer. " <>
+          "If the search results don't contain the information needed, say so clearly."
     }
 
     [system_msg | history]
@@ -226,23 +229,27 @@ defmodule SeathWeb.ChatLive do
             end)
 
           {[
-             %{
-               role: "system",
-               content:
-                 "You are a document Q&A assistant. Answer the user's question based only on the provided document context. If the context doesn't contain relevant information, say so. Be concise."
-             },
-             %{
-               role: "user",
-               content: """
-               Context documents:
-               #{Enum.join(context_parts, "\n\n")}
+              %{
+                role: "system",
+                content:
+                  "You are a document Q&A assistant. Think step by step. " <>
+                    "Review the context documents, identify which ones are relevant to the question, " <>
+                    "then answer based only on the provided context. " <>
+                    "Cite specific documents by title in your answer. " <>
+                    "If the context doesn't contain relevant information, say so clearly."
+              },
+              %{
+                role: "user",
+                content: """
+                Context documents:
+                #{Enum.join(context_parts, "\n\n")}
 
-               Question: #{query}
+                Question: #{query}
 
-               Answer concisely based only on the provided context. If the context doesn't contain relevant information, say so.
-               """
+                First, think about which documents are relevant. Then answer the question based only on the provided context. Cite specific documents by title. If the context doesn't contain relevant information, say so.
+                """
              }
-           ], all_results}
+            ], Enum.map(all_results, & &1.document) |> Enum.reject(&is_nil/1)}
       end
 
     # If no context was found, fall back to a simple query without context
@@ -252,7 +259,9 @@ defmodule SeathWeb.ChatLive do
           %{
             role: "system",
             content:
-              "You are a document Q&A assistant. Answer the user's question as best you can. If you don't know, say so."
+              "You are a document Q&A assistant. I searched the document archive but found no matching documents. " <>
+                "Tell the user honestly that no documents were found matching their query. " <>
+                "Suggest they try different search terms or check if the documents are archived."
           },
           %{role: "user", content: query}
         ]
@@ -311,9 +320,13 @@ defmodule SeathWeb.ChatLive do
               <div :if={msg.sources && msg.sources != []} class="mt-2 px-2">
                 <p class="text-xs text-base-content/90 mb-1">Sources:</p>
                 <div :for={source <- msg.sources} class="flex items-center gap-1 mb-1">
-                  <span class="text-xs text-blue-600 truncate">
-                    {source.title || source.file_name}
-                  </span>
+                  <.link
+                    navigate={"/documents/#{source.id}"}
+                    class="text-xs text-blue-600 hover:text-blue-800 hover:underline truncate flex items-center gap-1"
+                  >
+                    <span class="truncate">{source.title || source.file_name}</span>
+                    <span class="shrink-0">↗</span>
+                  </.link>
                 </div>
               </div>
             </div>

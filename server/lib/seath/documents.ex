@@ -131,12 +131,15 @@ defmodule Seath.Documents do
     with :ok <- validate_extension(ext),
          {:ok, file_size} <- read_file_size(temp_path),
          :ok <- validate_file_size(file_size),
+         hash = compute_sha256(temp_path),
+         :ok <- check_duplicate(hash),
          {:ok, stored_path} <- Storage.store(temp_path, original_filename) do
       create_document(%{
         file_path: stored_path,
         file_name: original_filename,
         file_type: mime_type(ext),
         file_size: file_size,
+        content_hash: hash,
         status: "pending"
       })
     end
@@ -448,6 +451,23 @@ defmodule Seath.Documents do
   end
 
   # --- Private helpers ---
+
+  defp compute_sha256(path) do
+    path
+    |> File.stream!(8192)
+    |> Enum.reduce(:crypto.hash_init(:sha256), fn chunk, state ->
+      :crypto.hash_update(state, chunk)
+    end)
+    |> :crypto.hash_final()
+    |> Base.encode16(case: :lower)
+  end
+
+  defp check_duplicate(hash) do
+    case Repo.get_by(Document, content_hash: hash) do
+      nil -> :ok
+      %Document{file_name: name} -> {:error, "duplicate: same content as '#{name}'"}
+    end
+  end
 
   defp validate_extension(ext) when ext in @allowed_extensions, do: :ok
 

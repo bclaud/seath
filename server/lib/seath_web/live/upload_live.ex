@@ -32,32 +32,39 @@ defmodule SeathWeb.UploadLive do
 
   @impl true
   def handle_event("save", _params, socket) do
-    File.mkdir_p!(Seath.Storage.upload_dir())
+    entries = socket.assigns[:uploads][:document].entries || []
 
-    docs =
-      consume_uploaded_entries(socket, :document, fn %{path: path}, entry ->
-        case Seath.Documents.ingest(path, entry.client_name) do
-          {:ok, doc} ->
-            Seath.Workers.OCRWorker.new(%{"document_id" => doc.id}) |> Oban.insert()
-            {:ok, doc}
+    if Enum.all?(entries, & &1.done?) do
+      File.mkdir_p!(Seath.Storage.upload_dir())
 
-          {:error, reason} ->
-            {:ok, %{error: reason, name: entry.client_name}}
-        end
-      end)
+      docs =
+        consume_uploaded_entries(socket, :document, fn %{path: path}, entry ->
+          case Seath.Documents.ingest(path, entry.client_name) do
+            {:ok, doc} ->
+              Seath.Workers.OCRWorker.new(%{"document_id" => doc.id}) |> Oban.insert()
+              {:ok, doc}
 
-    successes = Enum.filter(docs, &is_struct(&1, Seath.Documents.Document))
-    errors = Enum.reject(docs, &is_struct(&1, Seath.Documents.Document))
+            {:error, reason} ->
+              {:ok, %{error: reason, name: entry.client_name}}
+          end
+        end)
 
-    {:noreply,
-     socket
-     |> assign(:in_flight, successes ++ socket.assigns.in_flight)
-     |> put_flash(:info, "#{length(successes)} document(s) uploaded — pipeline started")
-     |> then(fn s ->
-       if errors != [],
-         do: put_flash(s, :error, "#{length(errors)} document(s) failed"),
-         else: s
-     end)}
+      successes = Enum.filter(docs, &is_struct(&1, Seath.Documents.Document))
+      errors = Enum.reject(docs, &is_struct(&1, Seath.Documents.Document))
+
+      {:noreply,
+       socket
+       |> assign(:in_flight, successes ++ socket.assigns.in_flight)
+       |> put_flash(:info, "#{length(successes)} document(s) uploaded — pipeline started")
+       |> then(fn s ->
+         if errors != [],
+           do: put_flash(s, :error, format_upload_errors(errors)),
+           else: s
+       end)}
+    else
+      {:noreply,
+       put_flash(socket, :error, "Files are still uploading — please wait for all transfers to complete")}
+    end
   end
 
   @impl true
@@ -171,9 +178,20 @@ defmodule SeathWeb.UploadLive do
           <button
             :if={length(@uploads.document.entries) > 0}
             type="submit"
-            class="mt-6 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            disabled={not all_entries_done?(@uploads.document.entries)}
+            class={[
+              "mt-6 w-full py-3 px-6 rounded-lg font-medium transition-colors",
+              if(all_entries_done?(@uploads.document.entries),
+                do: "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer",
+                else: "bg-gray-300 text-gray-500 cursor-not-allowed"
+              )
+            ]}
           >
-            Upload {length(@uploads.document.entries)} file(s)
+            <%= if all_entries_done?(@uploads.document.entries) do %>
+              Upload {length(@uploads.document.entries)} file(s)
+            <% else %>
+              Uploading... ({ready_count(@uploads.document.entries)}/{length(@uploads.document.entries)})
+            <% end %>
           </button>
         </form>
 
@@ -288,4 +306,19 @@ defmodule SeathWeb.UploadLive do
   defp status_rank("awaiting_review"), do: 2
   defp status_rank("archived"), do: 3
   defp status_rank(_), do: 0
+
+  defp all_entries_done?(entries) do
+    entries != [] and Enum.all?(entries, & &1.done?)
+  end
+
+  defp ready_count(entries) do
+    Enum.count(entries, & &1.done?)
+  end
+
+  defp format_upload_errors(errors) do
+    case errors do
+      [single] -> "#{single.name}: #{single.error}"
+      multiple when length(multiple) > 1 -> "#{length(multiple)} document(s) failed"
+    end
+  end
 end

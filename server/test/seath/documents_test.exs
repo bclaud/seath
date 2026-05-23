@@ -321,6 +321,28 @@ defmodule Seath.DocumentsTest do
       assert {:error, reason} = Documents.ingest(temp_path, "noext")
       assert reason =~ "unsupported file type"
     end
+
+    test "rejects duplicate content" do
+      content = "unique content for dedup test #{System.unique_integer([:positive])}"
+
+      temp_path1 = create_temp_file(content, ".pdf")
+      assert {:ok, %Document{content_hash: hash}} = Documents.ingest(temp_path1, "original.pdf")
+      assert hash != nil
+      assert String.length(hash) == 64
+
+      temp_path2 = create_temp_file(content, ".pdf")
+      assert {:error, reason} = Documents.ingest(temp_path2, "copy.pdf")
+      assert reason =~ "duplicate"
+      assert reason =~ "original.pdf"
+    end
+
+    test "allows different content with same filename" do
+      temp_path1 = create_temp_file("version one", ".pdf")
+      assert {:ok, %{}} = Documents.ingest(temp_path1, "report.pdf")
+
+      temp_path2 = create_temp_file("version two", ".pdf")
+      assert {:ok, %{}} = Documents.ingest(temp_path2, "report.pdf")
+    end
   end
 
   # --- Helpers ---
