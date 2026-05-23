@@ -2,18 +2,27 @@ defmodule Seath.OCR.Ollama do
   @moduledoc """
   Ollama OCR provider.
 
-  For PDF documents, first tries to extract embedded text via `pdftotext`
-  (most PDFs already have selectable text). Falls back to a vision model
-  for scanned/image-only PDFs.
+  Uses a vision model (default: glm-ocr, fallback: llama3.2-vision) for
+  high-quality text extraction. For PDFs, extracts digital text via
+  `pdftotext` AND renders pages to images for vision OCR, then merges
+  both results — ensuring text in embedded images is never missed.
 
-  For images (PNG, JPG, etc.), sends directly to the vision model.
+  This approach differentiates Seath from Paperless (which uses Tesseract):
+  vision AI understands document context, handles complex layouts, and
+  accurately reads text that traditional OCR struggles with.
 
   Requires a running Ollama instance with a vision model pulled.
-  `pdftotext` comes from poppler-utils (included in the Nix dev shell).
+  `pdftotext` and `pdftoppm` come from poppler-utils.
   """
   @behaviour Seath.OCR.Provider
 
   @image_extensions ~w(.png .jpg .jpeg .tiff .bmp)
+
+  @doc """
+  Best available models for OCR, in preference order.
+  These are known to produce excellent text extraction results.
+  """
+  @preferred_models ~w(glm-ocr llama3.2-vision)
 
   @impl true
   def extract(file_path) do
@@ -23,7 +32,10 @@ defmodule Seath.OCR.Ollama do
       Keyword.get(config, :base_url) ||
         System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
 
-    model = Keyword.get(config, :model) || System.get_env("OLLAMA_OCR_MODEL", "llava")
+    model =
+      Keyword.get(config, :model) ||
+        System.get_env("OLLAMA_OCR_MODEL") ||
+        first_available_model(base_url)
 
     ext = file_path |> Path.extname() |> String.downcase()
 
@@ -34,53 +46,63 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
-  # For image files, send directly to Ollama vision model
+  # Pick the first model from @preferred_models that's available in Ollama
+  defp first_available_model(base_url) do
+    available = list_ollama_models(base_url)
+
+    Enum.find_value(@preferred_models, "llava", fn model ->
+      if model in available, do: model
+    end)
+  end
+
+  defp list_ollama_models(base_url) do
+    case Req.get("#{base_url}/api/tags", receive_timeout: 2000) do
+      {:ok, %{status: 200, body: %{"models" => models}}} ->
+        Enum.map(models, & &1["name"])
+
+      _ ->
+        []
+    end
+  rescue
+    _ -> []
+  end
+
+  # --- Image extraction ---
+
   defp extract_image(file_path, base_url, model) do
     with {:ok, data} <- File.read(file_path) do
       send_to_ollama(Base.encode64(data), base_url, model)
     end
   end
 
-  # For PDFs: extract digital text first, then check if pages are missing text.
-  # If pdftotext returns very little text relative to page count, the PDF likely
-  # has scanned/image pages — run vision OCR on those pages and merge.
+  # --- PDF extraction ---
+
+  # For PDFs: ALWAYS run both pdftotext (digital layers) AND pdftoppm+vision
+  # (image layers), then merge. This ensures text in embedded images is
+  # never lost — the core improvement over Paperless's Tesseract-only approach.
   defp extract_pdf(file_path, base_url, model) do
     digital = extract_pdf_text(file_path)
+    vision = extract_pdf_via_vision(file_path, base_url, model)
 
-    case {digital, get_pdf_page_count(file_path)} do
-      {{:ok, text}, {:ok, page_count}} when text != "" and byte_size(text) < page_count * 100 ->
-        # Low text density — pages likely contain images. Run vision OCR and merge.
-        case extract_pdf_via_vision(file_path, base_url, model) do
-          {:ok, vision} ->
-            {:ok, "#{text}\n\n--- Additional OCR-extracted content ---\n\n#{vision}"}
-          {:error, _} ->
-            {:ok, text}
-        end
-
-      {{:ok, text}, _} when text != "" ->
-        # Plenty of digital text — use it directly
-        {:ok, text}
-
-      _ ->
-        # No digital text at all — use vision OCR
-        extract_pdf_via_vision(file_path, base_url, model)
-    end
+    merge_results(digital, vision)
   end
 
-  defp get_pdf_page_count(file_path) do
-    case System.cmd("pdfinfo", [file_path]) do
-      {output, 0} ->
-        case Regex.run(~r/Pages:\s+(\d+)/, output) do
-          [_, pages] -> {:ok, String.to_integer(pages)}
-          nil -> {:error, :no_page_count}
-        end
-
-      _ ->
-        {:error, :pdfinfo_failed}
-    end
+  defp merge_results({:ok, digital}, {:ok, vision}) do
+    {:ok, "#{digital}\n\n--- Image-extracted content ---\n\n#{vision}"}
   end
 
-  # Extract embedded text from PDF using pdftotext
+  defp merge_results({:ok, digital}, {:error, _}) do
+    {:ok, digital}
+  end
+
+  defp merge_results({:error, _}, {:ok, vision}) do
+    {:ok, vision}
+  end
+
+  defp merge_results({:error, reason}, {:error, _}) do
+    {:error, reason}
+  end
+
   defp extract_pdf_text(file_path) do
     case System.cmd("pdftotext", [file_path, "-"]) do
       {text, 0} ->
@@ -92,11 +114,12 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
-  # Convert PDF pages to images and OCR via vision model
+  # Convert PDF pages to images at 300 DPI and OCR each via vision model
   defp extract_pdf_via_vision(file_path, base_url, model) do
     tmp_dir = Path.join(System.tmp_dir!(), "seath_ocr_#{Ecto.UUID.generate()}")
 
-    case System.cmd("pdftoppm", ["-png", "-r", "200", file_path, tmp_dir]) do
+    # 300 DPI provides good quality for OCR without excessive file sizes
+    case System.cmd("pdftoppm", ["-png", "-r", "300", file_path, tmp_dir]) do
       {_, 0} ->
         pages =
           tmp_dir
@@ -140,6 +163,8 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
+  # --- Vision LLM call ---
+
   defp send_to_ollama(image_b64, base_url, model) do
     language = Application.get_env(:seath, :document_language, "Portuguese")
 
@@ -149,15 +174,7 @@ defmodule Seath.OCR.Ollama do
       messages: [
         %{
           role: "user",
-          content: """
-          Just transcribe the text in this image and preserve the formatting and layout (high quality OCR).
-          Do that for ALL the text in the image. Be thorough and pay attention. This is very important.
-          The image is from a text document so be sure to continue until the bottom of the page.
-          The document is likely in #{language}.
-          Thanks a lot! You tend to forget about some text in the image so please focus!
-          Pay special attention to monetary amounts, totals, invoice numbers, dates, tax IDs (CNPJ/CPF), and company names.
-          Use markdown format but without a code block.
-          """,
+          content: ocr_prompt(language),
           images: [image_b64]
         }
       ]
@@ -176,5 +193,25 @@ defmodule Seath.OCR.Ollama do
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp ocr_prompt(language) do
+    """
+    TRANSCRIPTION INSTRUCTIONS (this is an OCR task):
+
+    Transcribe EVERY word, number, and symbol visible in this image.
+    The document is in #{language}.
+
+    Rules:
+    - Output ONLY the raw text as it appears. No summaries, no descriptions.
+    - Preserve line breaks and paragraph spacing.
+    - Do NOT use markdown formatting (no **bold**, no `code`, no headings).
+    - Include headers, footers, page numbers, and fine print.
+    - Pay special attention to: numbers, dates, monetary amounts, tax IDs,
+      company names, and proper names.
+    - If text is in a table, maintain the row/column structure with spaces or tabs.
+    - If something is illegible, write [illegible] and continue.
+    - Transcribe everything from top to bottom — do not stop early.
+    """
   end
 end
