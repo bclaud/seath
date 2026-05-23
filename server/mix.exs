@@ -67,7 +67,8 @@ defmodule Seath.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:oban, "~> 2.18"},
-      {:pgvector, "~> 0.3"}
+      {:pgvector, "~> 0.3"},
+      {:earmark, "~> 1.4"}
     ]
   end
 

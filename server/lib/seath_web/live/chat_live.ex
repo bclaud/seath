@@ -311,6 +311,14 @@ defmodule SeathWeb.ChatLive do
     end
   end
 
+  defp render_markdown(content) when is_binary(content) and content != "" do
+    content
+    |> Earmark.as_html!()
+    |> String.trim_trailing()
+  end
+
+  defp render_markdown(_content), do: ""
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -343,7 +351,9 @@ defmodule SeathWeb.ChatLive do
 
             <div :if={msg.role == :assistant} class="max-w-[80%]">
               <div class="bg-white border rounded-2xl px-4 py-3">
-                <p class="text-sm text-base-content/90">{msg.content}</p>
+                <div class="text-sm text-base-content/90 prose prose-sm max-w-none [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded">
+                  {raw(render_markdown(msg.content))}
+                </div>
               </div>
               <div :if={msg.sources && msg.sources != []} class="mt-2 px-2">
                 <p class="text-xs text-base-content/90 mb-1">Sources:</p>
