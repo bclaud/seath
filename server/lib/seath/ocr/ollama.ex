@@ -48,30 +48,78 @@ defmodule Seath.OCR.Ollama do
 
   # --- PDF extraction ---
 
-  # For PDFs: ALWAYS run both pdftotext (digital layers) AND pdftoppm+vision
-  # (image layers), then merge. This ensures text in embedded images is
-  # never lost — the core improvement over Paperless's Tesseract-only approach.
+  # Three-pass extraction pipeline (inspired by docling-serve's approach):
+  #   1. pdftotext      — extracts digital text layers (surrounding text)
+  #   2. pdfimages      — extracts embedded images at NATIVE resolution
+  #                       (catches scanned CNH, photos, etc. at full quality)
+  #   3. pdftoppm+vision — renders pages as images and OCRs them
+  #                       (catches any remaining non-embedded visual text)
+  # All results are merged to ensure nothing is missed.
   defp extract_pdf(file_path, base_url, model) do
     digital = extract_pdf_text(file_path)
-    vision = extract_pdf_via_vision(file_path, base_url, model)
+    embedded = extract_embedded_images(file_path, base_url, model)
+    rendered = extract_pdf_via_vision(file_path, base_url, model)
 
-    merge_results(digital, vision)
+    digital
+    |> merge_result(embedded, "\n\n--- Embedded images ---\n\n")
+    |> merge_result(rendered, "\n\n--- Rendered pages ---\n\n")
   end
 
-  defp merge_results({:ok, digital}, {:ok, vision}) do
-    {:ok, "#{digital}\n\n--- Image-extracted content ---\n\n#{vision}"}
-  end
+  # Merge two extraction results:
+  # - If both have content, concatenate with separator
+  # - If one is empty/errored but the other has content, use the content
+  # - If both are empty/errored, propagate the first error or :no_text_extracted
+  defp merge_result({:ok, b}, {:ok, e}, sep) when e != "" and b != "",
+    do: {:ok, "#{b}#{sep}#{e}"}
 
-  defp merge_results({:ok, digital}, {:error, _}) do
-    {:ok, digital}
-  end
+  defp merge_result({:ok, ""}, {:ok, e}, _sep) when e != "", do: {:ok, e}
+  defp merge_result({:ok, b}, _extra, _sep) when b != "", do: {:ok, b}
 
-  defp merge_results({:error, _}, {:ok, vision}) do
-    {:ok, vision}
-  end
+  defp merge_result({:ok, ""}, {:ok, ""}, _sep), do: {:error, :no_text_extracted}
+  defp merge_result({:ok, ""}, {:error, r}, _sep), do: {:error, r}
+  defp merge_result({:error, r}, {:ok, ""}, _sep), do: {:error, r}
+  defp merge_result({:error, r}, {:error, _}, _sep), do: {:error, r}
 
-  defp merge_results({:error, reason}, {:error, _}) do
-    {:error, reason}
+  # Extract embedded images from PDF using pdfimages at their native resolution.
+  # This is critical for documents where valuable content (like a scanned CNH)
+  # is embedded as an image within the PDF — the model gets the full-resolution
+  # image directly instead of a tiny region within a rendered page.
+  defp extract_embedded_images(file_path, base_url, model) do
+    tmp_dir = Path.join(System.tmp_dir!(), "seath_img_#{Ecto.UUID.generate()}")
+    File.mkdir_p!(tmp_dir)
+
+    case System.cmd("pdfimages", ["-all", file_path, "#{tmp_dir}/img"]) do
+      {_, 0} ->
+        images =
+          tmp_dir
+          |> Path.join("*")
+          |> Path.wildcard()
+          |> Enum.reject(fn p -> Path.extname(p) in ~w(.txt .xml) end)
+          |> Enum.sort()
+
+        if images == [] do
+          File.rm_rf!(tmp_dir)
+          {:ok, ""}
+        else
+          texts =
+            Enum.map(images, fn img_path ->
+              case extract_image(img_path, base_url, model) do
+                {:ok, text} -> text
+                {:error, _} -> ""
+              end
+            end)
+
+          File.rm_rf!(tmp_dir)
+
+          combined = texts |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n--- Embedded Image ---\n\n")
+
+          {:ok, combined}
+        end
+
+      {_err, _code} ->
+        File.rm_rf!(tmp_dir)
+        {:ok, ""}
+    end
   end
 
   defp extract_pdf_text(file_path) do
