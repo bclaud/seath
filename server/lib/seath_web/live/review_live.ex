@@ -65,6 +65,26 @@ defmodule SeathWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("delete", %{"id" => id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+
+    case Seath.Documents.delete_document(doc) do
+      {:ok, _deleted} ->
+        documents = Seath.Documents.list_by_status("awaiting_review")
+
+        {:noreply,
+         socket
+         |> assign(:documents, documents)
+         |> assign(:selected_doc, nil)
+         |> assign(:involved_parties, [])
+         |> put_flash(:info, "Document deleted.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to delete: #{reason}")}
+    end
+  end
+
+  @impl true
   def handle_event("reclassify", %{"id" => id}, socket) do
     doc = Seath.Documents.get_document!(id)
     {:ok, _updated} = Seath.Documents.reclassify(doc)
@@ -564,6 +584,13 @@ defmodule SeathWeb.ReviewLive do
                   class="flex-1 bg-red-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-red-700 transition-colors"
                 >
                   <.icon name="hero-x-mark" class="w-5 h-5 inline mr-1" /> Reject
+                </button>
+                <button
+                  phx-click="delete"
+                  phx-value-id={@selected_doc.id}
+                  class="flex-1 bg-gray-700 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors"
+                >
+                  <.icon name="hero-trash" class="w-5 h-5 inline mr-1" /> Delete
                 </button>
               </div>
             </div>
