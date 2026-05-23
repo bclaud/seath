@@ -178,20 +178,9 @@ defmodule SeathWeb.UploadLive do
           <button
             :if={length(@uploads.document.entries) > 0}
             type="submit"
-            disabled={not all_entries_done?(@uploads.document.entries)}
-            class={[
-              "mt-6 w-full py-3 px-6 rounded-lg font-medium transition-colors",
-              if(all_entries_done?(@uploads.document.entries),
-                do: "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer",
-                else: "bg-gray-300 text-gray-500 cursor-not-allowed"
-              )
-            ]}
+            class="mt-6 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
-            <%= if all_entries_done?(@uploads.document.entries) do %>
-              Upload {length(@uploads.document.entries)} file(s)
-            <% else %>
-              Uploading... ({ready_count(@uploads.document.entries)}/{length(@uploads.document.entries)})
-            <% end %>
+            Upload {length(@uploads.document.entries)} file(s)
           </button>
         </form>
 
@@ -306,14 +295,6 @@ defmodule SeathWeb.UploadLive do
   defp status_rank("awaiting_review"), do: 2
   defp status_rank("archived"), do: 3
   defp status_rank(_), do: 0
-
-  defp all_entries_done?(entries) do
-    entries != [] and Enum.all?(entries, & &1.done?)
-  end
-
-  defp ready_count(entries) do
-    Enum.count(entries, & &1.done?)
-  end
 
   defp format_upload_errors(errors) do
     case errors do
