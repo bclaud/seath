@@ -21,8 +21,14 @@ defmodule Seath.OCR.Ollama do
   @doc """
   Best available models for OCR, in preference order.
   These are known to produce excellent text extraction results.
+
+  Recommended (ollama pull <name>):
+    qwen2.5-vl:7b   — current best open-source for OCR
+    llama3.2-vision  — strong all-around vision model
+    glm-ocr          — dedicated OCR model
+    minicpm-v        — good OCR in a smaller package
   """
-  @preferred_models ~w(glm-ocr llama3.2-vision)
+  @preferred_models ~w(qwen2.5-vl llama3.2-vision glm-ocr minicpm-v gemma3)
 
   @impl true
   def extract(file_path) do
@@ -46,13 +52,19 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
-  # Pick the first model from @preferred_models that's available in Ollama
+  # Pick the first model from @preferred_models that's available in Ollama.
+  # Strips the :tag suffix since Ollama returns "model:latest" but we
+  # match against bare names like "glm-ocr".
   defp first_available_model(base_url) do
-    available = list_ollama_models(base_url)
+    available =
+      base_url
+      |> list_ollama_models()
+      |> Enum.map(fn name -> name |> String.split(":") |> hd() end)
+      |> MapSet.new()
 
-    Enum.find_value(@preferred_models, "llava", fn model ->
-      if model in available, do: model
-    end)
+    Enum.find_value(@preferred_models, fn model ->
+      if MapSet.member?(available, model), do: model
+    end) || "llava"
   end
 
   defp list_ollama_models(base_url) do
