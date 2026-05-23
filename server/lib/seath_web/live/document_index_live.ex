@@ -322,6 +322,22 @@ defmodule SeathWeb.DocumentIndexLive do
   end
 
   @impl true
+  def handle_event("delete", %{"id" => id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+
+    case Seath.Documents.delete_document(doc) do
+      {:ok, _deleted} ->
+        {:noreply,
+         socket
+         |> stream_delete(:documents, doc)
+         |> put_flash(:info, "Document deleted.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to delete: #{reason}")}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_page={:documents}>
@@ -748,12 +764,22 @@ defmodule SeathWeb.DocumentIndexLive do
                       </span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                      <.link
-                        navigate={~p"/documents/#{doc.id}"}
-                        class="text-sm text-base-content/60 hover:text-blue-600 transition-colors"
-                      >
-                        <.icon name="hero-eye" class="w-4 h-4 inline" />
-                      </.link>
+                      <div class="flex items-center justify-end gap-2">
+                        <.link
+                          navigate={~p"/documents/#{doc.id}"}
+                          class="text-sm text-base-content/60 hover:text-blue-600 transition-colors"
+                        >
+                          <.icon name="hero-eye" class="w-4 h-4" />
+                        </.link>
+                        <button
+                          phx-click="delete"
+                          phx-value-id={doc.id}
+                          class="text-sm text-gray-400 hover:text-red-600 transition-colors"
+                          title="Delete document"
+                        >
+                          <.icon name="hero-trash" class="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
