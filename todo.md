@@ -70,6 +70,7 @@
 - [x] include prior documents' tags, type, and correspondent in classification context — LLM learns from user's actual filing patterns
 - [x] add a dedicated `chat`/`generate` callback to the LLM provider behaviour — RAG chat currently abuses `classify`, needs a proper abstraction
 - [x] seed default DocumentType entries (invoice, receipt, contract, email, letter, statement, report) — LLM can't propose types if none exist to match against
+- [x] expand to 30 document types with academic, financial, legal, personal, and business categories — LLM needs breadth to classify articles, homeworks, reports correctly
 - [x] implement multi-step classification with separate LLM calls per field (title, tags, document_type, correspondent, involved_parties) — follows paperless-gpt approach for better quality
 - [x] add vision OCR callback to LLM provider (ocr_vision/2) — enables LLM-based OCR with structured data extraction
 - [x] add correspondent extraction to search/match existing correspondents during classification
@@ -108,3 +109,23 @@
 - [x] add `content_hash` to Document schema with SHA-256 computation during ingest — enables duplicate detection without full re-scan
 - [x] check hash against existing documents and surface duplicate warnings in upload UI — prevents archive bloat from re-uploads
 - [x] add DB index on `content_hash` — fast lookup needed for real-time dedup during upload
+
+## Document Download & Preview — Fixes & Paperless Parity
+
+- [x] [high] fix document download endpoint — download link currently points to non-routed URL, completely broken
+- [x] [high] add inline PDF preview in document detail page using browser-native `<object>` tag — thumbnail-only preview was inadequate, Paperless sets clear benchmark
+- [x] add "open original in new tab" action for full-screen document viewing — complements inline preview with browser-native PDF tools
+
+## Pipeline Transparency — Oban Job States & Document Retry
+
+- [x] [high] add PubSub error broadcasts from OCRWorker and ClassifyWorker — UI never updated on failure, making documents appear stuck
+- [x] [high] surface Oban job states (executing/discarded/completed) in document detail Pipeline Status card — users can see exactly which worker failed and why
+- [x] [high] add retry button to document detail and index views for errored documents — no way to retry failed docs outside the upload page
+- [x] add smart `Documents.retry_failed/1` that re-enqueues OCRWorker or ClassifyWorker based on document state — retry picks the right worker automatically
+
+## Worker Error Handling — Bulletproofing
+
+- [x] [high] add try/rescue in OCRWorker and ClassifyWorker `perform` — any exception now marks document as "error" instead of leaving it "processing" forever
+- [x] [high] fix OCR error pattern matching — `{:unexpected_response, 200, body}` now caught correctly (Ollama returns 200 with error body for invalid models, not 500)
+- [x] [high] validate empty OCR text before calling `store_ocr_text` — `{:ok, ""}` no longer enters the classify pipeline to get stuck
+- [x] change catch-all from `{:error, reason}` to `{:discard, reason}` in both workers — permanent failures no longer cause useless Oban retries (user uses Retry button instead)

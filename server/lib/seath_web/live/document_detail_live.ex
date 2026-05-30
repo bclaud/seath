@@ -7,6 +7,14 @@ defmodule SeathWeb.DocumentDetailLive do
     types = Seath.DocumentTypes.list_types()
     correspondents = Seath.Correspondents.list_correspondents()
 
+    socket =
+      if connected?(socket) do
+        Phoenix.PubSub.subscribe(Seath.PubSub, "documents")
+        socket
+      else
+        socket
+      end
+
     {:ok,
      socket
      |> assign(:tags, tags)
@@ -22,10 +30,31 @@ defmodule SeathWeb.DocumentDetailLive do
       Seath.Documents.get_document!(id)
       |> Seath.Repo.preload([:tags, :document_type, :correspondent])
 
+    worker_jobs = Seath.WorkerJobs.latest_for_document(id)
+
     {:noreply,
      socket
      |> assign(:doc, doc)
+     |> assign(:worker_jobs, worker_jobs)
      |> assign(:edit_title, doc.title || "")}
+  end
+
+  @impl true
+  def handle_info({:document_updated, %{id: id}}, socket) do
+    if socket.assigns.doc.id == id do
+      doc =
+        Seath.Documents.get_document!(id)
+        |> Seath.Repo.preload([:tags, :document_type, :correspondent])
+
+      worker_jobs = Seath.WorkerJobs.latest_for_document(id)
+
+      {:noreply,
+       socket
+       |> assign(:doc, doc)
+       |> assign(:worker_jobs, worker_jobs)}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -61,6 +90,23 @@ defmodule SeathWeb.DocumentDetailLive do
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to update document.")}
     end
+  end
+
+  @impl true
+  def handle_event("retry_document", _params, socket) do
+    {:ok, _updated} = Seath.Documents.retry_failed(socket.assigns.doc)
+
+    doc =
+      Seath.Documents.get_document!(socket.assigns.doc.id)
+      |> Seath.Repo.preload([:tags, :document_type, :correspondent])
+
+    worker_jobs = Seath.WorkerJobs.latest_for_document(socket.assigns.doc.id)
+
+    {:noreply,
+     socket
+     |> assign(:doc, doc)
+     |> assign(:worker_jobs, worker_jobs)
+     |> put_flash(:info, "Document queued for retry.")}
   end
 
   @impl true
@@ -296,16 +342,42 @@ defmodule SeathWeb.DocumentDetailLive do
 
           <%!-- Sidebar --%>
           <div class="space-y-6">
-            <%!-- Thumbnail preview --%>
+            <%!-- Document preview --%>
             <div class="bg-white rounded-xl border p-4">
               <h3 class="text-sm font-semibold text-base-content mb-3">Preview</h3>
-              <div class="bg-gray-50 rounded-lg overflow-hidden">
-                <img
-                  src={~p"/documents/#{@doc.id}/thumbnail"}
-                  alt={"Preview of #{@doc.title || @doc.file_name}"}
-                  class="w-full h-auto object-contain"
-                  loading="lazy"
-                />
+              <div class="bg-gray-50 rounded-lg overflow-hidden max-h-[700px]">
+                <%= cond do %>
+                  <% @doc.file_type == "application/pdf" -> %>
+                    <object
+                      data={"/documents/#{@doc.id}/file"}
+                      type="application/pdf"
+                      class="w-full min-h-[500px]"
+                    >
+                      <p class="p-4 text-sm text-base-content/60">
+                        Your browser doesn't support embedded PDF viewing.
+                        <a
+                          href={"/documents/#{@doc.id}/download"}
+                          class="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Download the PDF
+                        </a>
+                        to view it.
+                      </p>
+                    </object>
+                  <% String.starts_with?(@doc.file_type, "image/") -> %>
+                    <img
+                      src={"/documents/#{@doc.id}/file"}
+                      alt={"Preview of #{@doc.title || @doc.file_name}"}
+                      class="w-full h-auto object-contain"
+                      loading="lazy"
+                    />
+                  <% true -> %>
+                    <div class="flex items-center justify-center min-h-[200px]">
+                      <p class="text-sm text-base-content/40">
+                        Preview not available for this file type.
+                      </p>
+                    </div>
+                <% end %>
               </div>
             </div>
 
@@ -340,16 +412,66 @@ defmodule SeathWeb.DocumentDetailLive do
               </div>
             </div>
 
+            <%!-- Pipeline Status --%>
+            <div
+              :if={@worker_jobs[:ocr] != [] or @worker_jobs[:classify] != []}
+              class="bg-white rounded-xl border p-4"
+            >
+              <h3 class="text-sm font-semibold text-base-content mb-3">Pipeline Status</h3>
+              <div class="space-y-2">
+                <div :for={job <- @worker_jobs[:ocr]}>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-base-content/70">OCR</span>
+                    <span class={["px-2 py-0.5 rounded-full font-medium", job_state_class(job.state)]}>
+                      {job.state}
+                      <%= if job.attempt > 0 do %>
+                        ({job.attempt}/{job.max_attempts})
+                      <% end %>
+                    </span>
+                  </div>
+                  <p :if={job.error} class="text-xs text-red-600 mt-0.5 font-mono">{job.error}</p>
+                </div>
+                <div :for={job <- @worker_jobs[:classify]}>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-base-content/70">Classification</span>
+                    <span class={["px-2 py-0.5 rounded-full font-medium", job_state_class(job.state)]}>
+                      {job.state}
+                      <%= if job.attempt > 0 do %>
+                        ({job.attempt}/{job.max_attempts})
+                      <% end %>
+                    </span>
+                  </div>
+                  <p :if={job.error} class="text-xs text-red-600 mt-0.5 font-mono">{job.error}</p>
+                </div>
+              </div>
+            </div>
+
             <%!-- Actions --%>
             <div class="bg-white rounded-xl border p-6">
               <h3 class="text-sm font-semibold text-base-content mb-3">Actions</h3>
               <div class="space-y-2">
+                <button
+                  :if={@doc.status == "error"}
+                  phx-click="retry_document"
+                  class="flex items-center gap-2 w-full px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+                >
+                  <.icon name="hero-arrow-path" class="w-4 h-4" /> Retry Processing
+                </button>
+
                 <a
-                  href={"/uploads/" <> URI.encode(@doc.file_path)}
-                  download={@doc.file_name}
+                  href={"/documents/#{@doc.id}/download"}
                   class="flex items-center gap-2 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
                   <.icon name="hero-arrow-down-tray" class="w-4 h-4" /> Download Original
+                </a>
+
+                <a
+                  href={"/documents/#{@doc.id}/file"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center gap-2 w-full px-4 py-2.5 border border-gray-300 text-base-content/80 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" /> Open Original
                 </a>
 
                 <.link
@@ -388,6 +510,19 @@ defmodule SeathWeb.DocumentDetailLive do
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(val), do: val
+
+  defp job_state_class(state) do
+    case state do
+      "completed" -> "bg-green-100 text-green-700"
+      "executing" -> "bg-blue-100 text-blue-700"
+      "available" -> "bg-yellow-100 text-yellow-700"
+      "discarded" -> "bg-red-100 text-red-700"
+      "retrying" -> "bg-orange-100 text-orange-700"
+      "retryable" -> "bg-orange-100 text-orange-700"
+      "cancelled" -> "bg-gray-100 text-gray-500"
+      _ -> "bg-gray-100 text-gray-600"
+    end
+  end
 
   defp status_badge_class(status) do
     case status do

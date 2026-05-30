@@ -24,8 +24,6 @@
           just
           postgresWithPgvector
           poppler-utils
-          tesseract
-          tesseract_pt
         ];
 
         devInputs = with pkgs; [

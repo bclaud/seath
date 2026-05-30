@@ -193,7 +193,12 @@ defmodule SeathWeb.ChatLive do
 
     # Step 1: Try grep-based retrieval first (exact match for names, IDs, dates)
     grep_results =
-      Seath.Retrieval.search(search_query, limit: 3, max_docs: 3, include_docs: true, status: "archived")
+      Seath.Retrieval.search(search_query,
+        limit: 3,
+        max_docs: 3,
+        include_docs: true,
+        status: "archived"
+      )
 
     grep_count = length(grep_results)
 
@@ -233,28 +238,28 @@ defmodule SeathWeb.ChatLive do
             end)
 
           {[
-              %{
-                role: "system",
-                content:
-                  "You are a document Q&A assistant. Think step by step. " <>
-                    "Review the context documents, identify which ones are relevant to the question, " <>
-                    "then answer based only on the provided context. " <>
-                    "Cite specific documents by title in your answer. " <>
-                    "If the context doesn't contain relevant information, say so clearly. " <>
-                    "Respond in the same language as the user's question."
-              },
-              %{
-                role: "user",
-                content: """
-                Context documents:
-                #{Enum.join(context_parts, "\n\n")}
+             %{
+               role: "system",
+               content:
+                 "You are a document Q&A assistant. Think step by step. " <>
+                   "Review the context documents, identify which ones are relevant to the question, " <>
+                   "then answer based only on the provided context. " <>
+                   "Cite specific documents by title in your answer. " <>
+                   "If the context doesn't contain relevant information, say so clearly. " <>
+                   "Respond in the same language as the user's question."
+             },
+             %{
+               role: "user",
+               content: """
+               Context documents:
+               #{Enum.join(context_parts, "\n\n")}
 
-                Question: #{query}
+               Question: #{query}
 
-                First, think about which documents are relevant. Then answer the question based only on the provided context. Cite specific documents by title. If the context doesn't contain relevant information, say so.
-                """
+               First, think about which documents are relevant. Then answer the question based only on the provided context. Cite specific documents by title. If the context doesn't contain relevant information, say so.
+               """
              }
-            ], Enum.map(all_results, & &1.document) |> Enum.reject(&is_nil/1)}
+           ], Enum.map(all_results, & &1.document) |> Enum.reject(&is_nil/1)}
       end
 
     # If no context was found, fall back to a simple query without context

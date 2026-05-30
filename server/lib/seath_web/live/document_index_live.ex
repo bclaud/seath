@@ -10,6 +10,14 @@ defmodule SeathWeb.DocumentIndexLive do
     correspondents = Seath.Correspondents.list_correspondents()
     saved_searches = Seath.SavedSearches.list_saved_searches()
 
+    socket =
+      if connected?(socket) do
+        Phoenix.PubSub.subscribe(Seath.PubSub, "documents")
+        socket
+      else
+        socket
+      end
+
     {:ok,
      socket
      |> assign(:tags, tags)
@@ -74,6 +82,32 @@ defmodule SeathWeb.DocumentIndexLive do
      |> assign(:search, search)
      |> assign(:filters, filters)
      |> assign(:saved_searches, saved_searches)
+     |> assign(:total_count, total_count)
+     |> assign(:pages, total_pages(total_count, @per_page))
+     |> assign(:no_results, documents == [])
+     |> stream(:documents, documents, reset: true)}
+  end
+
+  @impl true
+  def handle_info({:document_updated, _payload}, socket) do
+    {documents, total_count} =
+      Seath.Documents.list_documents_paginated(
+        page: socket.assigns.page,
+        per_page: socket.assigns.per_page,
+        sort_by: socket.assigns.sort_by,
+        sort_order: socket.assigns.sort_order,
+        search: socket.assigns.search,
+        status: blank_to_nil(socket.assigns.filters.status),
+        tag_ids: empty_list_to_nil(socket.assigns.filters.tag_ids),
+        document_type_id: blank_to_nil(socket.assigns.filters.document_type_id),
+        correspondent_id: blank_to_nil(socket.assigns.filters.correspondent_id),
+        involved_party: blank_to_nil(socket.assigns.filters.involved_party),
+        date_from: blank_to_nil(socket.assigns.filters.date_from),
+        date_to: blank_to_nil(socket.assigns.filters.date_to)
+      )
+
+    {:noreply,
+     socket
      |> assign(:total_count, total_count)
      |> assign(:pages, total_pages(total_count, @per_page))
      |> assign(:no_results, documents == [])
@@ -335,6 +369,36 @@ defmodule SeathWeb.DocumentIndexLive do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to delete: #{reason}")}
     end
+  end
+
+  @impl true
+  def handle_event("retry_document_index", %{"id" => id}, socket) do
+    doc = Seath.Documents.get_document!(id)
+    {:ok, _updated} = Seath.Documents.retry_failed(doc)
+
+    {documents, total_count} =
+      Seath.Documents.list_documents_paginated(
+        page: socket.assigns.page,
+        per_page: socket.assigns.per_page,
+        sort_by: socket.assigns.sort_by,
+        sort_order: socket.assigns.sort_order,
+        search: socket.assigns.search,
+        status: blank_to_nil(socket.assigns.filters.status),
+        tag_ids: empty_list_to_nil(socket.assigns.filters.tag_ids),
+        document_type_id: blank_to_nil(socket.assigns.filters.document_type_id),
+        correspondent_id: blank_to_nil(socket.assigns.filters.correspondent_id),
+        involved_party: blank_to_nil(socket.assigns.filters.involved_party),
+        date_from: blank_to_nil(socket.assigns.filters.date_from),
+        date_to: blank_to_nil(socket.assigns.filters.date_to)
+      )
+
+    {:noreply,
+     socket
+     |> assign(:total_count, total_count)
+     |> assign(:pages, total_pages(total_count, @per_page))
+     |> assign(:no_results, documents == [])
+     |> stream(:documents, documents, reset: true)
+     |> put_flash(:info, "Document queued for retry.")}
   end
 
   @impl true
@@ -771,6 +835,15 @@ defmodule SeathWeb.DocumentIndexLive do
                         >
                           <.icon name="hero-eye" class="w-4 h-4" />
                         </.link>
+                        <button
+                          :if={doc.status == "error"}
+                          phx-click="retry_document_index"
+                          phx-value-id={doc.id}
+                          class="text-sm text-red-500 hover:text-red-700 transition-colors"
+                          title="Retry document"
+                        >
+                          <.icon name="hero-arrow-path" class="w-4 h-4" />
+                        </button>
                         <button
                           phx-click="delete"
                           phx-value-id={doc.id}

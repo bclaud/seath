@@ -259,6 +259,36 @@ defmodule Seath.Documents do
   end
 
   @doc """
+  Retries a failed document by resetting it and re-enqueuing the appropriate worker.
+
+  If the document has no OCR text, re-enqueues OCRWorker.
+  If OCR text exists but classification hasn't completed, re-enqueues ClassifyWorker.
+  If both exist, re-enqueues OCRWorker for a full re-process.
+  """
+  def retry_failed(%Document{} = document) do
+    # Reset to pending with no error
+    {:ok, updated} =
+      document
+      |> Document.changeset(%{status: "pending", error_message: nil})
+      |> Repo.update()
+
+    # Choose the right worker
+    if is_nil(updated.ocr_text) or updated.ocr_text == "" do
+      Seath.Workers.OCRWorker.new(%{"document_id" => updated.id}) |> Oban.insert()
+    else
+      Seath.Workers.ClassifyWorker.new(%{"document_id" => updated.id}) |> Oban.insert()
+    end
+
+    Phoenix.PubSub.broadcast(
+      Seath.PubSub,
+      "documents",
+      {:document_updated, %{id: updated.id, status: "pending"}}
+    )
+
+    {:ok, updated}
+  end
+
+  @doc """
   Re-runs classification for a document that's awaiting review.
   Resets the document to processing, clears previous classification data,
   and enqueues a new ClassifyWorker job.

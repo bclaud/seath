@@ -66,8 +66,11 @@ defmodule Seath.LLM do
   """
   def classify_from_reasoning(thinking, text, available_tags, available_types, opts \\ []) do
     case impl() do
-      nil -> {:error, :not_configured}
-      provider -> provider.classify_from_reasoning(thinking, text, available_tags, available_types, opts)
+      nil ->
+        {:error, :not_configured}
+
+      provider ->
+        provider.classify_from_reasoning(thinking, text, available_tags, available_types, opts)
     end
   end
 

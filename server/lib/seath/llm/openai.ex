@@ -208,18 +208,38 @@ defmodule Seath.LLM.OpenAI do
     if is_nil(api_key) do
       {:error, :not_configured}
     else
-      do_classify_from_reasoning(thinking, text, available_tags, available_types, opts, api_key, base_url, model)
+      do_classify_from_reasoning(
+        thinking,
+        text,
+        available_tags,
+        available_types,
+        opts,
+        api_key,
+        base_url,
+        model
+      )
     end
   end
 
-  defp do_classify_from_reasoning(thinking, text, available_tags, available_types, opts, api_key, base_url, model) do
+  defp do_classify_from_reasoning(
+         thinking,
+         text,
+         available_tags,
+         available_types,
+         opts,
+         api_key,
+         base_url,
+         model
+       ) do
     language = Application.get_env(:seath, :document_language, "Portuguese")
     tags_list = Enum.join(available_tags, ", ")
     types_list = Enum.join(available_types, ", ")
 
     similar_context =
       case Keyword.get(opts, :similar_documents) do
-        nil -> ""
+        nil ->
+          ""
+
         docs when is_list(docs) and docs != [] ->
           doc_blocks =
             Enum.map(docs, fn d ->
@@ -227,6 +247,7 @@ defmodule Seath.LLM.OpenAI do
               tags_str = (doc.tags || []) |> Enum.map(& &1.name) |> Enum.join(", ")
               type_name = (doc.document_type && doc.document_type.name) || ""
               corr_name = (doc.correspondent && doc.correspondent.name) || ""
+
               """
               <document>
                 <title>#{doc.title || ""}</title>
@@ -236,8 +257,11 @@ defmodule Seath.LLM.OpenAI do
               </document>
               """
             end)
+
           "\n<similar_documents>\n#{Enum.join(doc_blocks, "\n")}\n</similar_documents>\n"
-        _ -> ""
+
+        _ ->
+          ""
       end
 
     prompt = """
@@ -323,7 +347,14 @@ defmodule Seath.LLM.OpenAI do
         if String.contains?(text_lower, String.downcase(correspondent)) do
           {verified ++ ["correspondent"], flagged}
         else
-          {verified, flagged ++ [%{field: "correspondent", reason: "Name '#{correspondent}' not found in document text"}]}
+          {verified,
+           flagged ++
+             [
+               %{
+                 field: "correspondent",
+                 reason: "Name '#{correspondent}' not found in document text"
+               }
+             ]}
         end
       else
         {verified, flagged}
@@ -334,12 +365,21 @@ defmodule Seath.LLM.OpenAI do
         parties when is_list(parties) and parties != [] ->
           Enum.reduce(parties, {verified, flagged}, fn party, {v, f} ->
             name = Map.get(party, :name, "") |> to_string()
+
             if name != "" and String.contains?(text_lower, String.downcase(name)) do
               {v ++ ["involved_party:#{name}"], f}
             else
-              {v, f ++ [%{field: "involved_party", reason: "Party '#{name}' not found in document text"}]}
+              {v,
+               f ++
+                 [
+                   %{
+                     field: "involved_party",
+                     reason: "Party '#{name}' not found in document text"
+                   }
+                 ]}
             end
           end)
+
         _ ->
           {verified, flagged}
       end
@@ -347,6 +387,7 @@ defmodule Seath.LLM.OpenAI do
     {verified, flagged} =
       if type = Map.get(classification, :document_type) do
         type_lower = String.downcase(type)
+
         type_indicators = [
           type_lower,
           type_lower <> " ",

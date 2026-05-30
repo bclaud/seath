@@ -142,7 +142,11 @@ defmodule SeathWeb.ReviewLiveTest do
         title: "Test Invoice",
         confidence: 0.45,
         llm_reasoning: "Initial classification",
-        verification_data: %{"passed" => false, "flagged_fields" => ["correspondent"], "verified_fields" => ["title"]},
+        verification_data: %{
+          "passed" => false,
+          "flagged_fields" => ["correspondent"],
+          "verified_fields" => ["title"]
+        },
         classification_attempts: 1
       })
 

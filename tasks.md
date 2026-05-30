@@ -1,28 +1,21 @@
 # Tasks
 
-_Last updated: 2026-05-22_
+_Last updated: 2026-05-29_
 
 ## In Progress
 
-_No tasks in progress._
-
 ## Backlog
-
-_No pending tasks._
 
 ## Completed
 
-- [x] **[server] Core thinking loop & pipeline improvements** — 2026-05-22
-  All 7 server-side items implemented (222 tests, 0 failures):
-  - Chain-of-thought "thinking" step (`think/2` callback)
-  - Extract-then-classify two-step pipeline (`classify_from_reasoning/4`)
-  - Verification pass (`verify/2` callback) — cross-checks entity grounding
-  - Heuristic confidence scoring (5-factor model, no LLM self-report)
-  - Text chunking for docs > 8,000 chars (6k chunks, 500-char overlap)
-  - Entity name dedup/normalization (Levenshtein fuzzy matching)
-  - Low-confidence auto-reclassification (retry with different prompt/temperature)
-  - New migration: `add_classification_quality_fields` (llm_reasoning, verification_data, classification_attempts)
-  - Added `Seath.Documents.reclassify/1` for frontend integration
+- [x] **[server] Add Oban job querying, error broadcasts, and smart retry for failed documents** — @server-specialist
+  Completed on 2026-05-29. Created `Seath.WorkerJobs` for Oban job queries, added PubSub error broadcasts to OCRWorker and ClassifyWorker, added `Documents.retry_failed/1` for smart worker re-enqueue. 225 tests pass.
 
-- [x] **[frontend] Add "Reclassify" button to review UI** — 2026-05-22
-  Added Reclassify button to review LiveView with PubSub subscription for real-time progress. Displays classification attempts, verification warnings (flagged fields), and heuristic confidence. Button disables during processing with spinner. 223 tests, 0 failures.
+- [x] **[frontend] Surface Oban job states and retry button in document index and detail views** — @frontend-specialist
+  Completed on 2026-05-29. Added Pipeline Status card with job states to detail view. Added retry buttons to both detail and index views. PubSub subscriptions for real-time updates. Status badges for Oban states (completed/executing/discarded/etc).
+
+- [x] **[server] Add document download and file-view controller endpoints** — @server-specialist
+  Completed on 2026-05-29. Added `download/2` (Content-Disposition: attachment) and `show/2` (Content-Disposition: inline) to `DocumentController`, plus routes in `router.ex`. 225 tests pass.
+
+- [x] **[frontend] Update document detail view with proper preview, download, and open-in-browser** — @frontend-specialist
+  Completed on 2026-05-29. Replaced thumbnail-only preview with `<object>` for PDFs / `<img>` for images. Fixed download link. Added "Open Original" button with `target="_blank"`. Compiles cleanly.

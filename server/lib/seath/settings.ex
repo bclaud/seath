@@ -195,7 +195,10 @@ defmodule Seath.Settings do
   defp maybe_put_ollama(settings) do
     if settings.ollama_base_url do
       existing = Application.get_env(:seath, Seath.LLM.Ollama, [])
-      Application.put_env(:seath, Seath.LLM.Ollama,
+
+      Application.put_env(
+        :seath,
+        Seath.LLM.Ollama,
         Keyword.merge(existing, base_url: settings.ollama_base_url)
       )
     end
@@ -204,7 +207,10 @@ defmodule Seath.Settings do
   defp maybe_put_openai(settings) do
     if settings.openai_api_key && settings.openai_api_key != "" do
       existing = Application.get_env(:seath, Seath.LLM.OpenAI, [])
-      Application.put_env(:seath, Seath.LLM.OpenAI,
+
+      Application.put_env(
+        :seath,
+        Seath.LLM.OpenAI,
         Keyword.merge(existing,
           api_key: settings.openai_api_key,
           base_url: settings.openai_base_url || "https://api.openai.com/v1"

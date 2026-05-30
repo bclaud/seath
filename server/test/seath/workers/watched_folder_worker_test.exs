@@ -40,7 +40,11 @@ defmodule Seath.Workers.WatchedFolderWorkerTest do
     end
 
     test "processes multiple files" do
-      for {name, content} <- [{"a.pdf", "content a"}, {"b.pdf", "content b"}, {"c.png", "content c"}] do
+      for {name, content} <- [
+            {"a.pdf", "content a"},
+            {"b.pdf", "content b"},
+            {"c.png", "content c"}
+          ] do
         File.write!(Path.join(@test_watch_dir, name), content)
       end
 
@@ -78,7 +82,11 @@ defmodule Seath.Workers.WatchedFolderWorkerTest do
     end
 
     test "ingests multiple file types" do
-      for {name, content} <- [{"scan.pdf", "pdf content"}, {"photo.jpg", "jpg content"}, {"note.txt", "txt content"}] do
+      for {name, content} <- [
+            {"scan.pdf", "pdf content"},
+            {"photo.jpg", "jpg content"},
+            {"note.txt", "txt content"}
+          ] do
         File.write!(Path.join(@test_watch_dir, name), content)
       end
 

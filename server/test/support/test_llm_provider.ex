@@ -20,7 +20,8 @@ defmodule Seath.TestLLMProvider do
   def think(_text, _opts \\ []) do
     {:ok,
      %{
-       reasoning: "This document is an invoice from Acme Corp. It contains financial details including amounts and dates.",
+       reasoning:
+         "This document is an invoice from Acme Corp. It contains financial details including amounts and dates.",
        extracted_entities: ["Acme Corp", "João Silva"],
        extracted_amounts: ["R$ 1.500,00"],
        extracted_dates: ["2024-03-15"],
@@ -36,7 +37,10 @@ defmodule Seath.TestLLMProvider do
        document_type: "invoice",
        tags: ["invoice", "finance"],
        correspondent: "Acme Corp",
-       involved_parties: [%{name: "Acme Corp", role: "sender"}, %{name: "João Silva", role: "recipient"}]
+       involved_parties: [
+         %{name: "Acme Corp", role: "sender"},
+         %{name: "João Silva", role: "recipient"}
+       ]
      }}
   end
 

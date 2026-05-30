@@ -63,7 +63,11 @@ defmodule SeathWeb.UploadLive do
        end)}
     else
       {:noreply,
-       put_flash(socket, :error, "Files are still uploading — please wait for all transfers to complete")}
+       put_flash(
+         socket,
+         :error,
+         "Files are still uploading — please wait for all transfers to complete"
+       )}
     end
   end
 

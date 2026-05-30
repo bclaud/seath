@@ -4,6 +4,53 @@ defmodule SeathWeb.DocumentController do
   @thumb_dir "priv/static/uploads/thumbnails"
   @thumb_width 200
 
+  @doc """
+  Serves a document file for download with `Content-Disposition: attachment`.
+  Returns 404 JSON if the file doesn't exist on disk.
+  """
+  def download(conn, %{"id" => id}) do
+    doc = Seath.Documents.get_document!(id)
+    full_path = Path.join(File.cwd!(), doc.file_path)
+
+    if File.exists?(full_path) do
+      conn
+      |> put_resp_content_type(doc.file_type, nil)
+      |> put_resp_header(
+        "content-disposition",
+        "attachment; filename=\"#{doc.file_name}\""
+      )
+      |> send_file(200, full_path)
+    else
+      conn
+      |> put_status(404)
+      |> json(%{error: "File not found on disk"})
+    end
+  end
+
+  @doc """
+  Serves a document file for inline viewing (e.g. PDF in browser) with
+  `Content-Disposition: inline`. Returns 404 JSON if the file doesn't
+  exist on disk.
+  """
+  def show(conn, %{"id" => id}) do
+    doc = Seath.Documents.get_document!(id)
+    full_path = Path.join(File.cwd!(), doc.file_path)
+
+    if File.exists?(full_path) do
+      conn
+      |> put_resp_content_type(doc.file_type, nil)
+      |> put_resp_header(
+        "content-disposition",
+        "inline; filename=\"#{doc.file_name}\""
+      )
+      |> send_file(200, full_path)
+    else
+      conn
+      |> put_status(404)
+      |> json(%{error: "File not found on disk"})
+    end
+  end
+
   def thumbnail(conn, %{"id" => id}) do
     doc = Seath.Documents.get_document!(id)
     thumb_path = thumbnail_path(doc)

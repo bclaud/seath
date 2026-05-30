@@ -31,54 +31,76 @@ defmodule Seath.Workers.ClassifyWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"document_id" => id}} = job) do
-    # Load current attempt count from the document
-    with {:ok, doc} <- fetch_document(id),
-         {:ok, text} <- validate_ocr_text(doc) do
-      attempt = Map.get(job.args, "classify_attempt", 0) + 1
+    try do
+      with {:ok, doc} <- fetch_document(id),
+           {:ok, text} <- validate_ocr_text(doc) do
+        attempt = Map.get(job.args, "classify_attempt", 0) + 1
 
-      # Update attempt count on document
-      {:ok, doc} = Documents.update_document(doc, %{classification_attempts: attempt})
+        # Update attempt count on document
+        {:ok, doc} = Documents.update_document(doc, %{classification_attempts: attempt})
 
-      result = classify_with_pipeline(text, attempt)
+        result = classify_with_pipeline(text, attempt)
 
-      case result do
-        {:ok, %{classification: classification, thinking: thinking, verification: verification, confidence: confidence}} ->
-          # Apply classification to document
-          {:ok, doc} = store_classification_data(doc, thinking, verification, confidence)
+        case result do
+          {:ok,
+           %{
+             classification: classification,
+             thinking: thinking,
+             verification: verification,
+             confidence: confidence
+           }} ->
+            # Apply classification to document
+            {:ok, doc} = store_classification_data(doc, thinking, verification, confidence)
 
-          cond do
-            confidence >= @high_confidence_threshold ->
-              # Good enough — apply and transition to awaiting_review
-              {:ok, _doc} = apply_classification(doc, classification)
-              broadcast_update(doc.id, "awaiting_review")
-              :ok
+            cond do
+              confidence >= @high_confidence_threshold ->
+                # Good enough — apply and transition to awaiting_review
+                {:ok, _doc} = apply_classification(doc, classification)
+                broadcast_update(doc.id, "awaiting_review")
+                :ok
 
-            attempt < @max_retries ->
-              # Low confidence — retry with different parameters
-              Logger.info("Classification confidence #{confidence} below threshold, retrying (attempt #{attempt})")
-              {:ok, _doc} = store_retry_hint(doc, thinking, verification)
-              reclassify_with_retry(doc, attempt)
+              attempt < @max_retries ->
+                # Low confidence — retry with different parameters
+                Logger.info(
+                  "Classification confidence #{confidence} below threshold, retrying (attempt #{attempt})"
+                )
 
-            confidence < @low_confidence_threshold ->
-              # Still bad after max retries — apply with warning
-              Logger.warning("Classification confidence #{confidence} too low after #{attempt} attempts, flagging for review")
-              {:ok, doc} = Documents.update_document(doc, %{confidence: confidence, title: doc.title})
-              {:ok, _doc} = apply_classification(doc, classification)
-              broadcast_update(doc.id, "awaiting_review")
-              :ok
+                {:ok, _doc} = store_retry_hint(doc, thinking, verification)
+                reclassify_with_retry(doc, attempt)
 
-            true ->
-              # Acceptable after retry
-              {:ok, _doc} = apply_classification(doc, classification)
-              broadcast_update(doc.id, "awaiting_review")
-              :ok
-          end
+              confidence < @low_confidence_threshold ->
+                # Still bad after max retries — apply with warning
+                Logger.warning(
+                  "Classification confidence #{confidence} too low after #{attempt} attempts, flagging for review"
+                )
 
-        {:error, reason} ->
-          handle_error(id, reason)
+                {:ok, doc} =
+                  Documents.update_document(doc, %{confidence: confidence, title: doc.title})
+
+                {:ok, _doc} = apply_classification(doc, classification)
+                broadcast_update(doc.id, "awaiting_review")
+                :ok
+
+              true ->
+                # Acceptable after retry
+                {:ok, _doc} = apply_classification(doc, classification)
+                broadcast_update(doc.id, "awaiting_review")
+                :ok
+            end
+
+          {:error, reason} ->
+            handle_error(id, reason)
+        end
+      else
+        {:error, reason} -> handle_error(id, reason)
       end
-    else
-      {:error, reason} -> handle_error(id, reason)
+    rescue
+      e ->
+        msg = "Unexpected classification error: #{Exception.message(e)}"
+        Logger.error(msg)
+        Logger.error(Exception.format_stacktrace(__STACKTRACE__))
+        mark_error(id, msg)
+        {:discard, :exception}
     end
   end
 
@@ -135,22 +157,47 @@ defmodule Seath.Workers.ClassifyWorker do
 
         similar_docs_len = length(similar_docs)
 
-        case Seath.LLM.classify_from_reasoning(thinking, text, tag_names, type_names, opts_with_hint) do
+        case Seath.LLM.classify_from_reasoning(
+               thinking,
+               text,
+               tag_names,
+               type_names,
+               opts_with_hint
+             ) do
           {:ok, classification} ->
             # Phase 3: Verify
             case Seath.LLM.verify(classification, text) do
               {:ok, verification} ->
                 # Phase 4: Compute heuristic confidence
-                confidence = compute_confidence(text, classification, similar_docs_len, verification)
+                confidence =
+                  compute_confidence(text, classification, similar_docs_len, verification)
 
-                {:ok, %{classification: classification, thinking: thinking, verification: verification, confidence: confidence}}
+                {:ok,
+                 %{
+                   classification: classification,
+                   thinking: thinking,
+                   verification: verification,
+                   confidence: confidence
+                 }}
 
               {:error, reason} ->
                 # If verification fails, still proceed with unverified flag
                 Logger.warning("Verification failed: #{inspect(reason)}")
                 confidence = compute_confidence(text, classification, similar_docs_len, nil)
-                verification = %{passed: false, verified_fields: [], flagged_fields: [%{field: "verification", reason: "Verification call failed"}]}
-                {:ok, %{classification: classification, thinking: thinking, verification: verification, confidence: confidence}}
+
+                verification = %{
+                  passed: false,
+                  verified_fields: [],
+                  flagged_fields: [%{field: "verification", reason: "Verification call failed"}]
+                }
+
+                {:ok,
+                 %{
+                   classification: classification,
+                   thinking: thinking,
+                   verification: verification,
+                   confidence: confidence
+                 }}
             end
 
           {:error, reason} ->
@@ -191,7 +238,9 @@ defmodule Seath.Workers.ClassifyWorker do
         end)
 
       case results do
-        {:error, reason} -> {:error, reason}
+        {:error, reason} ->
+          {:error, reason}
+
         thinking_results when is_list(thinking_results) ->
           {:ok, merge_thinking_results(thinking_results)}
       end
@@ -219,30 +268,33 @@ defmodule Seath.Workers.ClassifyWorker do
     do_split_chunks(text, chunk_size, overlap, [])
   end
 
-  defp do_split_chunks(text, _chunk_size, _overlap, acc) when byte_size(text) <= @max_direct_text do
+  defp do_split_chunks(text, _chunk_size, _overlap, acc)
+       when byte_size(text) <= @max_direct_text do
     Enum.reverse([text | acc])
   end
 
   defp do_split_chunks(text, chunk_size, overlap, acc) do
-    # Find a good break point near chunk_size
-    chunk = String.slice(text, 0, chunk_size)
+    # Find a good break point near chunk_size bytes
+    take = min(chunk_size, byte_size(text))
+    break_at = find_break_point(text, take)
 
-    # Try to break at a sentence end or newline
-    break_at = find_break_point(chunk)
-
-    chunk_part = String.slice(text, 0, break_at)
-    remaining = String.slice(text, break_at - overlap, byte_size(text) - break_at + overlap)
+    # Use binary_part for byte-accurate slicing
+    chunk_part = :binary.part(text, 0, break_at)
+    remaining_start = max(0, break_at - overlap)
+    remaining_len = byte_size(text) - remaining_start
+    remaining = :binary.part(text, remaining_start, remaining_len)
 
     do_split_chunks(remaining, chunk_size, overlap, [chunk_part | acc])
   end
 
-  defp find_break_point(chunk) do
-    chunk_size = byte_size(chunk)
-    half = div(chunk_size, 2)
+  defp find_break_point(text, max_size) do
+    half = div(max_size, 2)
+    # Only search within the first max_size bytes
+    search_region = :binary.part(text, 0, max_size)
 
     # Find last occurrence of each candidate after the halfway point
-    last_newline = find_last_substring(chunk, "\n")
-    last_period = find_last_substring(chunk, ". ")
+    last_newline = find_last_substring(search_region, "\n")
+    last_period = find_last_substring(search_region, ". ")
 
     candidates =
       [last_newline, last_period]
@@ -250,7 +302,9 @@ defmodule Seath.Workers.ClassifyWorker do
       |> Enum.filter(&(&1 > half))
 
     case candidates do
-      [] -> chunk_size
+      [] ->
+        max_size
+
       _ ->
         pos = Enum.max(candidates)
         if last_newline && pos == last_newline, do: pos + 1, else: pos + 2
@@ -264,10 +318,11 @@ defmodule Seath.Workers.ClassifyWorker do
 
   defp do_find_last(string, pattern, offset, last_found) do
     remaining = byte_size(string) - offset
+
     if remaining <= 0 do
       last_found
     else
-      case :binary.match(string, pattern, [:scope, {offset, remaining}]) do
+      case :binary.match(string, pattern, [{:scope, {offset, remaining}}]) do
         {pos, len} ->
           do_find_last(string, pattern, pos + len, pos)
 
@@ -313,7 +368,14 @@ defmodule Seath.Workers.ClassifyWorker do
     }
   end
 
-  defp merge_thinking_results(_), do: %{reasoning: "", extracted_entities: [], extracted_amounts: [], extracted_dates: [], summary: ""}
+  defp merge_thinking_results(_),
+    do: %{
+      reasoning: "",
+      extracted_entities: [],
+      extracted_amounts: [],
+      extracted_dates: [],
+      summary: ""
+    }
 
   # ============================================================================
   # Heuristic Confidence Scoring (Item 4)
@@ -351,12 +413,18 @@ defmodule Seath.Workers.ClassifyWorker do
     # 4. Verification score (0.0 - 0.25)
     verification_score =
       case verification do
-        nil -> 0.1
-        %{passed: true} -> 0.25
+        nil ->
+          0.1
+
+        %{passed: true} ->
+          0.25
+
         %{passed: false, flagged_fields: flagged} when is_list(flagged) ->
           # Penalize proportionally to flagged fields
-          max(0.05, 0.25 - (length(flagged) * 0.07))
-        _ -> 0.05
+          max(0.05, 0.25 - length(flagged) * 0.07)
+
+        _ ->
+          0.05
       end
 
     # 5. Internal consistency score (0.0 - 0.2)
@@ -383,7 +451,9 @@ defmodule Seath.Workers.ClassifyWorker do
       |> Enum.map(&String.downcase/1)
 
     case entities do
-      [] -> 0.15
+      [] ->
+        0.15
+
       ents ->
         found = Enum.count(ents, fn ent -> String.contains?(text_lower, ent) end)
         ratio = found / length(ents)
@@ -448,6 +518,7 @@ defmodule Seath.Workers.ClassifyWorker do
         # 3. Levenshtein similarity
         if Enum.any?(existing_entities, fn e ->
              existing_name = name_accessor.(e)
+
              String.length(existing_name) > 3 &&
                String.length(name_str) > 3 &&
                levenshtein_similarity(
@@ -627,7 +698,9 @@ defmodule Seath.Workers.ClassifyWorker do
         end
 
       case type do
-        nil -> doc
+        nil ->
+          doc
+
         t ->
           {:ok, updated} = Documents.update_document(doc, %{document_type_id: t.id})
           updated
@@ -663,7 +736,9 @@ defmodule Seath.Workers.ClassifyWorker do
         end
 
       case correspondent do
-        nil -> doc
+        nil ->
+          doc
+
         corr ->
           {:ok, updated} = Documents.update_document(doc, %{correspondent_id: corr.id})
           updated
@@ -704,17 +779,19 @@ defmodule Seath.Workers.ClassifyWorker do
     normalized = normalize_name(name_str)
 
     # Try exact first
-    exact = Enum.find(entities, fn e ->
-      String.downcase(name_accessor.(e)) == String.downcase(name_str)
-    end)
+    exact =
+      Enum.find(entities, fn e ->
+        String.downcase(name_accessor.(e)) == String.downcase(name_str)
+      end)
 
     if exact do
       exact
     else
       # Try normalized
-      normalized_match = Enum.find(entities, fn e ->
-        normalize_name(name_accessor.(e)) == normalized
-      end)
+      normalized_match =
+        Enum.find(entities, fn e ->
+          normalize_name(name_accessor.(e)) == normalized
+        end)
 
       if normalized_match do
         normalized_match
@@ -722,9 +799,11 @@ defmodule Seath.Workers.ClassifyWorker do
         # Try Levenshtein
         Enum.find(entities, fn e ->
           existing_name = name_accessor.(e)
+
           String.length(existing_name) > 3 &&
             String.length(name_str) > 3 &&
-            levenshtein_similarity(String.downcase(existing_name), String.downcase(name_str)) >= 0.8
+            levenshtein_similarity(String.downcase(existing_name), String.downcase(name_str)) >=
+              0.8
         end)
       end
     end
@@ -763,14 +842,23 @@ defmodule Seath.Workers.ClassifyWorker do
         msg = "Classification error: #{inspect(reason)}"
         Logger.error(msg)
         mark_error(id, msg)
-        {:error, reason}
+        {:discard, reason}
     end
   end
 
   defp mark_error(document_id, message) do
     case Documents.get_document(document_id) do
-      nil -> :ok
-      doc -> Documents.mark_as_error(doc, message)
+      nil ->
+        :ok
+
+      doc ->
+        Documents.mark_as_error(doc, message)
+
+        Phoenix.PubSub.broadcast(
+          Seath.PubSub,
+          "documents",
+          {:document_updated, %{id: doc.id, status: "error", error_message: message}}
+        )
     end
   end
 

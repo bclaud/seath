@@ -111,7 +111,8 @@ defmodule Seath.OCR.Ollama do
 
           File.rm_rf!(tmp_dir)
 
-          combined = texts |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n--- Embedded Image ---\n\n")
+          combined =
+            texts |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n--- Embedded Image ---\n\n")
 
           {:ok, combined}
         end

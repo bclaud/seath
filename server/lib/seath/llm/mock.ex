@@ -20,7 +20,8 @@ defmodule Seath.LLM.Mock do
   def think(_text, _opts \\ []) do
     {:ok,
      %{
-       reasoning: "This appears to be a mock document. It contains test data for development purposes.",
+       reasoning:
+         "This appears to be a mock document. It contains test data for development purposes.",
        extracted_entities: ["Mock Entity"],
        extracted_amounts: ["R$ 1.000,00"],
        extracted_dates: ["2024-01-15"],
@@ -46,7 +47,12 @@ defmodule Seath.LLM.Mock do
     if String.contains?(text, "Mock") do
       {:ok, %{passed: true, verified_fields: ["correspondent"], flagged_fields: []}}
     else
-      {:ok, %{passed: false, verified_fields: [], flagged_fields: [%{field: "correspondent", reason: "Mock check failed"}]}}
+      {:ok,
+       %{
+         passed: false,
+         verified_fields: [],
+         flagged_fields: [%{field: "correspondent", reason: "Mock check failed"}]
+       }}
     end
   end
 

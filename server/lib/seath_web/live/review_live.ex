@@ -96,7 +96,10 @@ defmodule SeathWeb.ReviewLive do
     {:noreply,
      socket
      |> assign(:selected_doc, updated)
-     |> put_flash(:info, "Reclassification started for \"#{updated.title || updated.file_name}\".")}
+     |> put_flash(
+       :info,
+       "Reclassification started for \"#{updated.title || updated.file_name}\"."
+     )}
   end
 
   @impl true
@@ -214,8 +217,12 @@ defmodule SeathWeb.ReviewLive do
 
     type =
       case Seath.DocumentTypes.get_type_by_name(name) do
-        nil -> {:ok, t} = Seath.DocumentTypes.create_type(%{name: name}); t
-        existing -> existing
+        nil ->
+          {:ok, t} = Seath.DocumentTypes.create_type(%{name: name})
+          t
+
+        existing ->
+          existing
       end
 
     doc = Seath.Documents.get_document!(id)
@@ -444,7 +451,12 @@ defmodule SeathWeb.ReviewLive do
               </div>
 
               <%!-- Classification attempts --%>
-              <div :if={@selected_doc.classification_attempts && @selected_doc.classification_attempts > 0} class="mb-3">
+              <div
+                :if={
+                  @selected_doc.classification_attempts && @selected_doc.classification_attempts > 0
+                }
+                class="mb-3"
+              >
                 <span class="text-xs text-base-content/70">
                   Attempt {@selected_doc.classification_attempts}
                 </span>
@@ -454,13 +466,16 @@ defmodule SeathWeb.ReviewLive do
               <div
                 :if={
                   @selected_doc.verification_data &&
-                  @selected_doc.verification_data["passed"] == false &&
-                  length(@selected_doc.verification_data["flagged_fields"] || []) > 0
+                    @selected_doc.verification_data["passed"] == false &&
+                    length(@selected_doc.verification_data["flagged_fields"] || []) > 0
                 }
                 class="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
               >
                 <div class="flex items-start gap-2">
-                  <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                  <.icon
+                    name="hero-exclamation-triangle"
+                    class="w-5 h-5 text-yellow-600 shrink-0 mt-0.5"
+                  />
                   <div>
                     <p class="text-sm font-medium text-yellow-800">Verification Flags</p>
                     <ul class="mt-1 text-sm text-yellow-700 list-disc list-inside">
@@ -607,8 +622,7 @@ defmodule SeathWeb.ReviewLive do
                     <.icon name="hero-arrow-path" class="w-5 h-5 inline mr-1 animate-spin" />
                     Reclassifying...
                   <% else %>
-                    <.icon name="hero-arrow-clockwise" class="w-5 h-5 inline mr-1" />
-                    Reclassify
+                    <.icon name="hero-arrow-clockwise" class="w-5 h-5 inline mr-1" /> Reclassify
                   <% end %>
                 </button>
                 <button
