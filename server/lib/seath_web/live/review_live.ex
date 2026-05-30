@@ -294,49 +294,50 @@ defmodule SeathWeb.ReviewLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_page={:review} review_count={length(@documents)}>
-      <div class="max-w-6xl mx-auto py-8 px-4">
-        <h1 class="text-2xl font-bold text-base-content mb-2">Document Review</h1>
-        <p class="text-base-content/90 mb-8">
-          {length(@documents)} document(s) awaiting review
-        </p>
+      <div class="max-w-7xl mx-auto py-8 px-4">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-base-content">Document Review</h1>
+            <p class="text-base-content/90 text-sm mt-1">
+              {length(@documents)} document(s) awaiting review
+            </p>
+          </div>
 
-        <%!-- Bulk action bar --%>
-        <div
-          :if={MapSet.size(@selected_ids) > 0}
-          class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between"
-        >
-          <span class="text-sm text-blue-800">
-            {MapSet.size(@selected_ids)} document(s) selected
-          </span>
-          <div class="flex gap-2">
+          <%!-- Bulk action bar --%>
+          <div :if={MapSet.size(@selected_ids) > 0} class="flex items-center gap-3">
+            <span class="text-sm text-blue-800 font-medium">
+              {MapSet.size(@selected_ids)} selected
+            </span>
             <button
               phx-click="bulk_approve"
-              class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+              class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
             >
               Approve Selected
             </button>
             <button
               phx-click="bulk_reject"
-              class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+              class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
             >
               Reject Selected
             </button>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <%!-- Document list --%>
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <%!-- Document list sidebar --%>
           <div class="lg:col-span-1 space-y-2">
             <div
               :for={doc <- @documents}
               id={"doc-list-item-#{doc.id}"}
               class={[
-                "flex items-center gap-2 p-4 rounded-lg border bg-white transition-colors",
+                "flex items-center gap-2 p-3 rounded-lg border bg-white transition-colors cursor-pointer",
                 if(@selected_doc && @selected_doc.id == doc.id,
-                  do: "border-blue-500 bg-blue-50",
-                  else: "border-gray-200 hover:border-gray-300"
+                  do: "border-blue-500 bg-blue-50 ring-1 ring-blue-200",
+                  else: "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                 )
               ]}
+              phx-click="select"
+              phx-value-id={doc.id}
             >
               <input
                 type="checkbox"
@@ -344,122 +345,182 @@ defmodule SeathWeb.ReviewLive do
                 phx-value-id={doc.id}
                 checked={MapSet.member?(@selected_ids, doc.id)}
                 class="rounded border-gray-300 shrink-0"
+                onclick="event.stopPropagation()"
               />
-              <div phx-click="select" phx-value-id={doc.id} class="flex-1 cursor-pointer">
-                <h3 class="font-semibold text-base-content truncate">{doc.title || doc.file_name}</h3>
-                <p class="text-sm text-base-content/90 mt-1">
-                  {doc.file_type} · {format_file_size(doc.file_size)}
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-base-content truncate">
+                  {doc.title || doc.file_name}
+                </p>
+                <p class="text-xs text-base-content/70 mt-0.5">
+                  {format_file_size(doc.file_size)}
                 </p>
               </div>
             </div>
 
             <div :if={@documents == []} class="text-center py-12 text-base-content/90">
-              <.icon name="hero-inbox" class="w-12 h-12 mx-auto mb-3 text-base-content/90" />
-              <p class="text-base-content font-medium">No documents awaiting review</p>
+              <.icon name="hero-inbox" class="w-10 h-10 mx-auto mb-2 text-base-content/90" />
+              <p class="text-sm text-base-content font-medium">No documents awaiting review</p>
             </div>
           </div>
 
-          <%!-- Document detail --%>
-          <div :if={@selected_doc} class="lg:col-span-2">
-            <div class="bg-white rounded-xl border p-6">
-              <%!-- Title --%>
-              <div class="mb-6">
-                <label class="block text-sm font-semibold text-base-content mb-1">Title</label>
-                <form phx-change="update_title" phx-value-id={@selected_doc.id}>
-                  <input
-                    type="text"
-                    name="title"
-                    value={@selected_doc.title}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </form>
-              </div>
-
-              <%!-- Document type --%>
-              <div class="mb-6">
-                <label class="block text-sm font-semibold text-base-content mb-1">
-                  Document Type
-                </label>
-                <form phx-change="update_type" phx-value-id={@selected_doc.id}>
-                  <select
-                    name="document_type_id"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          <%!-- Detail pane --%>
+          <div :if={@selected_doc} class="lg:col-span-4 space-y-6">
+            <%!-- Document preview --%>
+            <div class="bg-white rounded-xl border overflow-hidden">
+              <%= cond do %>
+                <% @selected_doc.file_type == "application/pdf" -> %>
+                  <object
+                    data={"/documents/#{@selected_doc.id}/file"}
+                    type="application/pdf"
+                    class="w-full min-h-[500px]"
                   >
-                    <option value="">None</option>
-                    <option
-                      :for={type <- @types}
-                      value={type.id}
-                      selected={
-                        @selected_doc.document_type && @selected_doc.document_type.id == type.id
-                      }
-                    >
-                      {type.name}
-                    </option>
-                  </select>
-                </form>
-                <form
-                  phx-submit="create_type"
-                  phx-value-id={@selected_doc.id}
-                  class="flex gap-1 mt-2"
-                >
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="New type..."
-                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    <p class="p-4 text-sm text-base-content/60">
+                      Your browser doesn't support embedded PDF viewing.
+                      <a
+                        href={"/documents/#{@selected_doc.id}/download"}
+                        class="text-blue-600 hover:text-blue-800 underline"
+                      >Download the PDF</a> to view it.
+                    </p>
+                  </object>
+                <% String.starts_with?(@selected_doc.file_type, "image/") -> %>
+                  <img
+                    src={"/documents/#{@selected_doc.id}/file"}
+                    alt={"Preview of #{@selected_doc.title || @selected_doc.file_name}"}
+                    class="w-full h-auto object-contain max-h-[600px]"
+                    loading="lazy"
                   />
-                  <button
-                    type="submit"
-                    class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
-                  >
-                    Create
-                  </button>
-                </form>
-              </div>
-
-              <%!-- Confidence --%>
-              <div :if={@selected_doc.confidence} class="mb-3">
-                <label class="block text-sm font-semibold text-base-content mb-1">
-                  Classification Confidence
-                </label>
-                <div class="flex items-center gap-3">
-                  <div class="flex-1 bg-gray-200 rounded-full h-3">
-                    <div
-                      class={[
-                        "h-3 rounded-full transition-all",
-                        cond do
-                          @selected_doc.confidence >= 0.8 -> "bg-green-500"
-                          @selected_doc.confidence >= 0.5 -> "bg-yellow-500"
-                          true -> "bg-red-500"
-                        end
-                      ]}
-                      style={"width: #{Float.round(@selected_doc.confidence * 100)}%"}
-                    >
-                    </div>
+                <% true -> %>
+                  <div class="flex items-center justify-center min-h-[200px] bg-gray-50">
+                    <p class="text-sm text-base-content/40">Preview not available for this file type.</p>
                   </div>
-                  <span class={[
-                    "text-sm font-medium",
-                    cond do
-                      @selected_doc.confidence >= 0.8 -> "text-green-700"
-                      @selected_doc.confidence >= 0.5 -> "text-yellow-700"
-                      true -> "text-red-700"
-                    end
-                  ]}>
-                    {Float.round(@selected_doc.confidence * 100, 1)}%
+              <% end %>
+            </div>
+
+            <%!-- Metadata & actions panel --%>
+            <div class="bg-white rounded-xl border p-6">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+                <%!-- Title --%>
+                <div class="lg:col-span-2">
+                  <label class="block text-sm font-semibold text-base-content mb-1">Title</label>
+                  <form phx-change="update_title" phx-value-id={@selected_doc.id}>
+                    <input
+                      type="text"
+                      name="title"
+                      value={@selected_doc.title}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </form>
+                </div>
+
+                <%!-- Document type --%>
+                <div>
+                  <label class="block text-sm font-semibold text-base-content mb-1">
+                    Document Type
+                  </label>
+                  <form phx-change="update_type" phx-value-id={@selected_doc.id}>
+                    <div class="flex gap-1">
+                      <select
+                        name="document_type_id"
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">None</option>
+                        <option
+                          :for={type <- @types}
+                          value={type.id}
+                          selected={
+                            @selected_doc.document_type && @selected_doc.document_type.id == type.id
+                          }
+                        >
+                          {type.name}
+                        </option>
+                      </select>
+                      <form
+                        phx-submit="create_type"
+                        phx-value-id={@selected_doc.id}
+                        class="flex gap-1"
+                      >
+                        <input
+                          type="text"
+                          name="name"
+                          placeholder="New..."
+                          class="w-24 px-2 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="submit"
+                          class="px-2 py-2 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 transition-colors"
+                        >
+                          Add
+                        </button>
+                      </form>
+                    </div>
+                  </form>
+                </div>
+
+                <%!-- Correspondent --%>
+                <div>
+                  <label class="block text-sm font-semibold text-base-content mb-1">
+                    Correspondent
+                  </label>
+                  <form phx-change="update_correspondent" phx-value-id={@selected_doc.id}>
+                    <select
+                      name="correspondent_id"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">None</option>
+                      <option
+                        :for={corr <- @correspondents}
+                        value={corr.id}
+                        selected={
+                          @selected_doc.correspondent && @selected_doc.correspondent.id == corr.id
+                        }
+                      >
+                        {corr.name}
+                      </option>
+                    </select>
+                  </form>
+                </div>
+
+                <%!-- Confidence --%>
+                <div :if={@selected_doc.confidence}>
+                  <label class="block text-sm font-semibold text-base-content mb-1">
+                    Classification Confidence
+                  </label>
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1 bg-gray-200 rounded-full h-3">
+                      <div
+                        class={[
+                          "h-3 rounded-full transition-all",
+                          @selected_doc.confidence >= 0.8 && "bg-green-500",
+                          @selected_doc.confidence >= 0.5 && @selected_doc.confidence < 0.8 && "bg-yellow-500",
+                          @selected_doc.confidence < 0.5 && "bg-red-500"
+                        ]}
+                        style={"width: #{Float.round(@selected_doc.confidence * 100)}%"}
+                      >
+                      </div>
+                    </div>
+                    <span class={[
+                      "text-sm font-medium shrink-0",
+                      @selected_doc.confidence >= 0.8 && "text-green-700",
+                      @selected_doc.confidence >= 0.5 && @selected_doc.confidence < 0.8 && "text-yellow-700",
+                      @selected_doc.confidence < 0.5 && "text-red-700"
+                    ]}>
+                      {Float.round(@selected_doc.confidence * 100, 1)}%
+                    </span>
+                  </div>
+                </div>
+
+                <%!-- Classification attempts --%>
+                <div
+                  :if={
+                    @selected_doc.classification_attempts &&
+                      @selected_doc.classification_attempts > 0
+                  }
+                  class="flex items-end"
+                >
+                  <span class="text-xs text-base-content/70">
+                    Attempt {@selected_doc.classification_attempts}
                   </span>
                 </div>
-              </div>
-
-              <%!-- Classification attempts --%>
-              <div
-                :if={
-                  @selected_doc.classification_attempts && @selected_doc.classification_attempts > 0
-                }
-                class="mb-3"
-              >
-                <span class="text-xs text-base-content/70">
-                  Attempt {@selected_doc.classification_attempts}
-                </span>
               </div>
 
               <%!-- Verification warnings --%>
@@ -469,7 +530,7 @@ defmodule SeathWeb.ReviewLive do
                     @selected_doc.verification_data["passed"] == false &&
                     length(@selected_doc.verification_data["flagged_fields"] || []) > 0
                 }
-                class="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+                class="mt-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
               >
                 <div class="flex items-start gap-2">
                   <.icon
@@ -487,32 +548,8 @@ defmodule SeathWeb.ReviewLive do
                 </div>
               </div>
 
-              <%!-- Correspondent --%>
-              <div class="mb-6">
-                <label class="block text-sm font-semibold text-base-content mb-1">
-                  Correspondent
-                </label>
-                <form phx-change="update_correspondent" phx-value-id={@selected_doc.id}>
-                  <select
-                    name="correspondent_id"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">None</option>
-                    <option
-                      :for={corr <- @correspondents}
-                      value={corr.id}
-                      selected={
-                        @selected_doc.correspondent && @selected_doc.correspondent.id == corr.id
-                      }
-                    >
-                      {corr.name}
-                    </option>
-                  </select>
-                </form>
-              </div>
-
               <%!-- Tags --%>
-              <div class="mb-6">
+              <div class="mt-6">
                 <label class="block text-sm font-semibold text-base-content mb-2">Tags</label>
                 <div class="flex flex-wrap gap-2 mb-3">
                   <span
@@ -526,7 +563,7 @@ defmodule SeathWeb.ReviewLive do
                       phx-value-tag_id={tag.id}
                       class="ml-1 hover:text-blue-600"
                     >
-                      <.icon name="hero-x-mark" class="w-4 h-4" />
+                      <.icon name="hero-x-mark" class="w-3.5 h-3.5" />
                     </button>
                   </span>
                 </div>
@@ -545,11 +582,11 @@ defmodule SeathWeb.ReviewLive do
                       type="text"
                       name="name"
                       placeholder="New tag..."
-                      class="px-3 py-2 border border-gray-300 rounded-lg text-sm w-32"
+                      class="w-24 px-2 py-2 border border-gray-300 rounded-lg text-xs"
                     />
                     <button
                       type="submit"
-                      class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                      class="px-2 py-2 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700"
                     >
                       Add
                     </button>
@@ -558,7 +595,7 @@ defmodule SeathWeb.ReviewLive do
               </div>
 
               <%!-- Involved Parties --%>
-              <div class="mb-6">
+              <div class="mt-6">
                 <label class="block text-sm font-semibold text-base-content mb-2">
                   Involved Parties
                 </label>
@@ -567,14 +604,14 @@ defmodule SeathWeb.ReviewLive do
                     :for={party <- @involved_parties}
                     class="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg"
                   >
-                    <div>
+                    <div class="min-w-0">
                       <span class="text-sm font-medium text-base-content">{party.name}</span>
                       <span class="text-xs text-base-content/70 ml-2">({party.role})</span>
                     </div>
                     <button
                       phx-click="remove_involved_party"
                       phx-value-party_id={party.id}
-                      class="text-red-500 hover:text-red-700"
+                      class="text-red-500 hover:text-red-700 shrink-0"
                     >
                       <.icon name="hero-x-mark" class="w-4 h-4" />
                     </button>
@@ -588,29 +625,15 @@ defmodule SeathWeb.ReviewLive do
                 </p>
               </div>
 
-              <%!-- OCR Text preview --%>
-              <div class="mb-6">
-                <label class="block text-sm font-semibold text-base-content mb-1">
-                  Extracted Text
-                </label>
-                <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto font-mono text-xs leading-relaxed">
-                  <pre class="whitespace-pre-wrap text-base-content/90">
-                    {if @selected_doc.ocr_text,
-                      do: @selected_doc.ocr_text,
-                      else: "No text extracted"}
-                  </pre>
-                </div>
-              </div>
-
               <%!-- Actions --%>
-              <div class="flex gap-3 pt-4 border-t">
+              <div class="flex gap-3 mt-6 pt-6 border-t">
                 <button
                   id="reclassify-btn"
                   phx-click="reclassify"
                   phx-value-id={@selected_doc.id}
                   disabled={@selected_doc.status == "processing"}
                   class={[
-                    "flex-1 py-3 px-6 rounded-lg font-medium transition-colors border",
+                    "flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors border text-sm",
                     if @selected_doc.status == "processing" do
                       "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
                     else
@@ -619,41 +642,67 @@ defmodule SeathWeb.ReviewLive do
                   ]}
                 >
                   <%= if @selected_doc.status == "processing" do %>
-                    <.icon name="hero-arrow-path" class="w-5 h-5 inline mr-1 animate-spin" />
+                    <.icon name="hero-arrow-path" class="w-4 h-4 inline mr-1 animate-spin" />
                     Reclassifying...
                   <% else %>
-                    <.icon name="hero-arrow-clockwise" class="w-5 h-5 inline mr-1" /> Reclassify
+                    <.icon name="hero-arrow-clockwise" class="w-4 h-4 inline mr-1" /> Reclassify
                   <% end %>
                 </button>
                 <button
                   id="approve-btn"
                   phx-click="approve"
                   phx-value-id={@selected_doc.id}
-                  class="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                  class="flex-1 bg-green-600 text-white py-2.5 px-4 rounded-lg font-medium text-sm hover:bg-green-700 transition-colors"
                 >
-                  <.icon name="hero-check" class="w-5 h-5 inline mr-1" /> Approve &amp; Archive
+                  <.icon name="hero-check" class="w-4 h-4 inline mr-1" /> Approve &amp; Archive
                 </button>
                 <button
                   id="reject-btn"
                   phx-click="reject"
                   phx-value-id={@selected_doc.id}
-                  class="flex-1 bg-red-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-red-700 transition-colors"
+                  class="flex-1 bg-red-600 text-white py-2.5 px-4 rounded-lg font-medium text-sm hover:bg-red-700 transition-colors"
                 >
-                  <.icon name="hero-x-mark" class="w-5 h-5 inline mr-1" /> Reject
+                  <.icon name="hero-x-mark" class="w-4 h-4 inline mr-1" /> Reject
                 </button>
                 <button
                   phx-click="delete"
                   phx-value-id={@selected_doc.id}
-                  class="flex-1 bg-gray-700 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors"
+                  class="py-2.5 px-4 rounded-lg font-medium text-sm border border-gray-300 text-base-content/70 hover:bg-gray-50 transition-colors"
                 >
-                  <.icon name="hero-trash" class="w-5 h-5 inline mr-1" /> Delete
+                  <.icon name="hero-trash" class="w-4 h-4 inline mr-1" /> Delete
                 </button>
               </div>
+            </div>
+
+            <%!-- OCR text (collapsible) --%>
+            <div class="bg-white rounded-xl border overflow-hidden">
+              <details class="group">
+                <summary class="flex items-center gap-2 px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors list-none">
+                  <.icon name="hero-document-text" class="w-5 h-5 text-base-content/70 shrink-0" />
+                  <span class="text-sm font-semibold text-base-content">Extracted Text</span>
+                  <span class="text-xs text-base-content/50 ml-auto">
+                    <%= if @selected_doc.ocr_text do %>
+                      {String.length(@selected_doc.ocr_text)} chars
+                    <% end %>
+                  </span>
+                  <.icon
+                    name="hero-chevron-down"
+                    class="w-4 h-4 text-base-content/50 transition-transform group-open:rotate-180"
+                  />
+                </summary>
+                <div class="border-t px-6 py-4 bg-gray-50">
+                  <pre class="whitespace-pre-wrap text-xs font-mono leading-relaxed text-base-content/90 max-h-[500px] overflow-y-auto">
+                    {if @selected_doc.ocr_text,
+                      do: @selected_doc.ocr_text,
+                      else: "No text extracted"}
+                  </pre>
+                </div>
+              </details>
             </div>
           </div>
 
           <%!-- Empty state --%>
-          <div :if={!@selected_doc} class="lg:col-span-2 flex items-center justify-center">
+          <div :if={!@selected_doc} class="lg:col-span-4 flex items-center justify-center min-h-[400px]">
             <div class="text-center text-base-content/90">
               <.icon
                 name="hero-document-magnifying-glass"

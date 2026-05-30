@@ -42,13 +42,13 @@ defmodule SeathWeb.ReviewLiveTest do
 
     # Select the document
     view
-    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
+    |> element("#doc-list-item-#{doc.id}", "Test Invoice")
     |> render_click()
 
     html = render(view)
     assert html =~ "Approve &amp; Archive"
     assert html =~ "Reject"
-    assert html =~ "Invoice #12345"
+    assert html =~ "Extracted Text"
   end
 
   test "can approve a document", %{conn: conn} do
@@ -66,7 +66,7 @@ defmodule SeathWeb.ReviewLiveTest do
 
     # Select the document
     view
-    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
+    |> element("#doc-list-item-#{doc.id}", "Test Invoice")
     |> render_click()
 
     assert render(view) =~ "Approve &amp; Archive"
@@ -95,7 +95,7 @@ defmodule SeathWeb.ReviewLiveTest do
     {:ok, view, _html} = live(conn, ~p"/review")
 
     view
-    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
+    |> element("#doc-list-item-#{doc.id}", "Test Invoice")
     |> render_click()
 
     view
@@ -120,7 +120,7 @@ defmodule SeathWeb.ReviewLiveTest do
     {:ok, view, _html} = live(conn, ~p"/review")
 
     view
-    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
+    |> element("#doc-list-item-#{doc.id}", "Test Invoice")
     |> render_click()
 
     view
@@ -154,7 +154,7 @@ defmodule SeathWeb.ReviewLiveTest do
 
     # Select the document
     view
-    |> element("#doc-list-item-#{doc.id} div", "Test Invoice")
+    |> element("#doc-list-item-#{doc.id}", "Test Invoice")
     |> render_click()
 
     assert render(view) =~ "Reclassify"
