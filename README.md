@@ -47,7 +47,7 @@ This is **not** a polished consumer product. It is a tool built by and for peopl
 # Prerequisites: Ollama running with a vision model for OCR
 # and a chat model for classification. PostgreSQL running.
 
-git clone https://github.com/your-org/seath
+git clone https://github.com/bclaud/seath
 cd seath/server
 
 cp config/runtime.exs.example config/runtime.exs
