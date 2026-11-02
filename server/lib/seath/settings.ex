@@ -35,7 +35,7 @@ defmodule Seath.Settings do
           azure_endpoint: nil,
           azure_key: nil,
           ollama_base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
-          ollama_ocr_model: System.get_env("OLLAMA_OCR_MODEL", "llama3.2-vision"),
+          ollama_ocr_model: System.get_env("OLLAMA_OCR_MODEL", "minicpm-v"),
           ollama_llm_model: System.get_env("OLLAMA_LLM_MODEL", "gemma4"),
           ollama_chat_model: System.get_env("OLLAMA_CHAT_MODEL", "gemma4"),
           openai_api_key: nil,

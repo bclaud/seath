@@ -291,6 +291,55 @@ defmodule Seath.ArchiveRulesTest do
       # only the old_doc
       assert ArchiveRules.apply_rule(rule) == 1
     end
+
+    test "JEV gatekeeper holds back documents flagged by verification", %{
+      rule: rule,
+      old_doc: old_doc
+    } do
+      {:ok, _} =
+        Documents.update_document(old_doc, %{
+          verification_data: %{
+            "passed" => false,
+            "flagged_fields" => [%{"field" => "correspondent", "reason" => "Not grounded"}]
+          }
+        })
+
+      assert ArchiveRules.apply_rule(rule) == 0
+      reloaded = Documents.get_document!(old_doc.id)
+      assert reloaded.status == "awaiting_review"
+    end
+  end
+
+  describe "jev_gatekeeper_allows_auto_archive?/5" do
+    test "allows high-confidence, verified, non-actionable documents" do
+      classification = %{needs_human_review: false, is_actionable: false}
+      verification = %{passed: true, flagged_fields: []}
+
+      assert ArchiveRules.jev_gatekeeper_allows_auto_archive?(
+               %{},
+               classification,
+               verification,
+               0.92
+             )
+    end
+
+    test "blocks documents marked needs_human_review or is_actionable" do
+      verification = %{passed: true, flagged_fields: []}
+
+      refute ArchiveRules.jev_gatekeeper_allows_auto_archive?(
+               %{},
+               %{needs_human_review: true, is_actionable: false},
+               verification,
+               0.95
+             )
+
+      refute ArchiveRules.jev_gatekeeper_allows_auto_archive?(
+               %{},
+               %{needs_human_review: false, is_actionable: true},
+               verification,
+               0.95
+             )
+    end
   end
 
   # --- Helpers ---

@@ -2,20 +2,28 @@ defmodule Seath.OCR.Ollama do
   @moduledoc """
   Ollama OCR provider.
 
-  Uses a vision model for text extraction — configured explicitly via
-  Settings or OLLAMA_OCR_MODEL env var (default: "llava").
-  Users should pull a capable vision model:
-    ollama pull llama3.2-vision   (good all-around)
-    ollama pull qwen2.5-vl:7b     (excellent OCR)
-    ollama pull glm-ocr           (dedicated OCR model)
+  Uses a vision model for high-accuracy text extraction — configured explicitly via
+  Settings or OLLAMA_OCR_MODEL env var (default: "minicpm-v").
+  Recommended local vision models:
+    ollama pull minicpm-v         (top OCR accuracy, tables & dense text)
+    ollama pull deepseek-ocr      (dedicated document OCR)
+    ollama pull glm-ocr           (lightweight dedicated OCR)
 
-  For PDFs, extracts digital text via pdftotext AND renders pages to
-  images for vision OCR, then merges both results — ensuring text in
-  embedded images (like scanned CNH pasted into a document) is captured.
+  For PDFs, uses an accuracy-first adaptive pipeline:
+    - If the PDF contains a rich native digital text layer (`pdftotext -layout`),
+      it preserves the exact digital characters and only runs Vision OCR on
+      significant embedded images (> 20 KB, skipping tiny icons/logos) so
+      attached scans (like a CNH or receipt) are captured without duplicating
+      the page text.
+    - If the PDF is a scanned/raster document (sparse or empty digital text),
+      it renders pages at 300 DPI (`pdftoppm`) and runs deterministic
+      (temperature 0.0) Vision OCR per page.
   """
   @behaviour Seath.OCR.Provider
 
   @image_extensions ~w(.png .jpg .jpeg .tiff .bmp)
+  @min_digital_text_chars 120
+  @min_embedded_image_bytes 20_480
 
   @impl true
   def extract(file_path) do
@@ -27,7 +35,7 @@ defmodule Seath.OCR.Ollama do
 
     model =
       Keyword.get(config, :model) ||
-        System.get_env("OLLAMA_OCR_MODEL", "llava")
+        System.get_env("OLLAMA_OCR_MODEL", "minicpm-v")
 
     ext = file_path |> Path.extname() |> String.downcase()
 
@@ -48,21 +56,24 @@ defmodule Seath.OCR.Ollama do
 
   # --- PDF extraction ---
 
-  # Three-pass extraction pipeline (inspired by docling-serve's approach):
-  #   1. pdftotext      — extracts digital text layers (surrounding text)
-  #   2. pdfimages      — extracts embedded images at NATIVE resolution
-  #                       (catches scanned CNH, photos, etc. at full quality)
-  #   3. pdftoppm+vision — renders pages as images and OCRs them
-  #                       (catches any remaining non-embedded visual text)
-  # All results are merged to ensure nothing is missed.
   defp extract_pdf(file_path, base_url, model) do
-    digital = extract_pdf_text(file_path)
-    embedded = extract_embedded_images(file_path, base_url, model)
-    rendered = extract_pdf_via_vision(file_path, base_url, model)
+    case extract_pdf_text(file_path) do
+      {:ok, digital_text} when byte_size(digital_text) >= @min_digital_text_chars ->
+        # Digital PDF with native text layer: keep exact digital text and only
+        # OCR substantial embedded images (e.g. scanned ID/receipt pasted in).
+        embedded = extract_embedded_images(file_path, base_url, model)
+        merge_result({:ok, digital_text}, embedded, "\n\n--- Embedded images ---\n\n")
 
-    digital
-    |> merge_result(embedded, "\n\n--- Embedded images ---\n\n")
-    |> merge_result(rendered, "\n\n--- Rendered pages ---\n\n")
+      {:ok, sparse_text} ->
+        # Scanned/raster PDF: render full pages at 300 DPI and run Vision OCR
+        # (do not run pdfimages separately, as pdftoppm already renders the scan in context)
+        rendered = extract_pdf_via_vision(file_path, base_url, model)
+        merge_result({:ok, sparse_text}, rendered, "\n\n--- Rendered pages ---\n\n")
+
+      {:error, _} = err ->
+        rendered = extract_pdf_via_vision(file_path, base_url, model)
+        merge_result(err, rendered, "\n\n--- Rendered pages ---\n\n")
+    end
   end
 
   # Merge two extraction results:
@@ -80,21 +91,20 @@ defmodule Seath.OCR.Ollama do
   defp merge_result({:error, r}, {:ok, ""}, _sep), do: {:error, r}
   defp merge_result({:error, r}, {:error, _}, _sep), do: {:error, r}
 
-  # Extract embedded images from PDF using pdfimages at their native resolution.
-  # This is critical for documents where valuable content (like a scanned CNH)
-  # is embedded as an image within the PDF — the model gets the full-resolution
-  # image directly instead of a tiny region within a rendered page.
+  # Extract embedded images from PDF using pdfimages at their native resolution,
+  # filtering out tiny icons, logos, and decorative borders (< 20 KB).
   defp extract_embedded_images(file_path, base_url, model) do
     tmp_dir = Path.join(System.tmp_dir!(), "seath_img_#{Ecto.UUID.generate()}")
     File.mkdir_p!(tmp_dir)
 
-    case System.cmd("pdfimages", ["-all", file_path, "#{tmp_dir}/img"]) do
+    case System.cmd("pdfimages", ["-png", file_path, "#{tmp_dir}/img"]) do
       {_, 0} ->
         images =
           tmp_dir
           |> Path.join("*")
           |> Path.wildcard()
           |> Enum.reject(fn p -> Path.extname(p) in ~w(.txt .xml) end)
+          |> Enum.filter(&substantial_image?/1)
           |> Enum.sort()
 
         if images == [] do
@@ -123,8 +133,15 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
+  defp substantial_image?(path) do
+    case File.stat(path) do
+      {:ok, %File.Stat{size: size}} -> size >= @min_embedded_image_bytes
+      _ -> false
+    end
+  end
+
   defp extract_pdf_text(file_path) do
-    case System.cmd("pdftotext", [file_path, "-"]) do
+    case System.cmd("pdftotext", ["-layout", file_path, "-"]) do
       {text, 0} ->
         trimmed = String.trim(text)
         {:ok, trimmed}
@@ -191,6 +208,7 @@ defmodule Seath.OCR.Ollama do
     body = %{
       model: model,
       stream: false,
+      options: %{temperature: 0.0, num_ctx: 8192},
       messages: [
         %{
           role: "user",

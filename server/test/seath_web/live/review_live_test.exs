@@ -171,4 +171,55 @@ defmodule SeathWeb.ReviewLiveTest do
     assert updated.verification_data == %{}
     assert updated.classification_attempts == 0
   end
+
+  test "renders JEV badges, AI insights, and map-structured flagged_fields", %{conn: conn} do
+    reasoning =
+      Jason.encode!(%{
+        thinking: %{
+          summary: "Monthly electricity bill from Enel",
+          extracted_amounts: ["R$ 342,90"],
+          extracted_dates: ["2026-04-15"]
+        },
+        classification: %{
+          is_actionable: true,
+          needs_human_review: true
+        }
+      })
+
+    {:ok, doc} =
+      Seath.Documents.create_document(%{
+        file_path: "/tmp/enel.pdf",
+        file_name: "enel.pdf",
+        file_type: "application/pdf",
+        file_size: 1024,
+        status: "awaiting_review",
+        title: "Enel Bill April",
+        confidence: 0.88,
+        llm_reasoning: reasoning,
+        verification_data: %{
+          "passed" => false,
+          "verified_fields" => ["title", "jev_calibrated"],
+          "flagged_fields" => [
+            %{"field" => "correspondent", "reason" => "Correspondent not grounded in text"}
+          ],
+          "is_actionable" => true,
+          "needs_human_review" => true
+        }
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/review")
+
+    view
+    |> element("#doc-list-item-#{doc.id}", "Enel Bill April")
+    |> render_click()
+
+    html = render(view)
+    assert html =~ "JEV Calibrated"
+    assert html =~ "Actionable"
+    assert html =~ "Needs Human Review"
+    assert html =~ "Monthly electricity bill from Enel"
+    assert html =~ "R$ 342,90"
+    assert html =~ "2026-04-15"
+    assert html =~ "correspondent: Correspondent not grounded in text"
+  end
 end

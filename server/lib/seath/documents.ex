@@ -207,6 +207,11 @@ defmodule Seath.Documents do
           {:ok, updated} ->
             if updated.ocr_text && updated.ocr_text != "" do
               regenerate_text_file(updated)
+
+              if new_status == "archived" do
+                Seath.Workers.EmbedWorker.new(%{"document_id" => updated.id})
+                |> Oban.insert()
+              end
             end
 
             {:ok, updated}
@@ -325,18 +330,32 @@ defmodule Seath.Documents do
   Returns an empty list for empty or nil queries.
   """
   def search(query) when is_binary(query) and query != "" do
-    tsquery =
-      query
-      |> String.split()
-      |> Enum.map(&(&1 <> ":*"))
-      |> Enum.join(" & ")
+    tsquery = build_safe_tsquery(query)
+    like_pattern = "%#{String.trim(query)}%"
 
-    from(d in Document,
-      where: fragment("search_vector @@ to_tsquery('english', ?)", ^tsquery),
-      order_by: fragment("ts_rank(search_vector, to_tsquery('english', ?)) DESC", ^tsquery),
-      preload: [:tags, :document_type]
-    )
-    |> Repo.all()
+    if tsquery != "" do
+      from(d in Document,
+        where:
+          fragment("search_vector @@ to_tsquery('english', ?)", ^tsquery) or
+            fragment("search_vector @@ websearch_to_tsquery('simple', ?)", ^query) or
+            ilike(d.title, ^like_pattern) or
+            ilike(d.file_name, ^like_pattern) or
+            ilike(d.ocr_text, ^like_pattern),
+        order_by: fragment("ts_rank(search_vector, to_tsquery('english', ?)) DESC", ^tsquery),
+        preload: [:tags, :document_type, :correspondent]
+      )
+      |> Repo.all()
+    else
+      from(d in Document,
+        where:
+          ilike(d.title, ^like_pattern) or
+            ilike(d.file_name, ^like_pattern) or
+            ilike(d.ocr_text, ^like_pattern),
+        order_by: [desc: d.inserted_at],
+        preload: [:tags, :document_type, :correspondent]
+      )
+      |> Repo.all()
+    end
   end
 
   def search(_), do: []
@@ -408,18 +427,32 @@ defmodule Seath.Documents do
   defp maybe_filter_by_search(query, ""), do: query
 
   defp maybe_filter_by_search(query, search_query) do
-    tsquery =
-      search_query
-      |> String.split()
-      |> Enum.map(&(&1 <> ":*"))
-      |> Enum.join(" & ")
+    tsquery = build_safe_tsquery(search_query)
+    like_pattern = "%#{String.trim(search_query)}%"
 
-    from(d in query,
-      where:
-        fragment("search_vector @@ to_tsquery('english', ?)", ^tsquery) or
-          ilike(d.title, ^"%#{search_query}%") or
-          ilike(d.file_name, ^"%#{search_query}%")
-    )
+    if tsquery != "" do
+      from(d in query,
+        where:
+          fragment("search_vector @@ to_tsquery('english', ?)", ^tsquery) or
+            fragment("search_vector @@ websearch_to_tsquery('simple', ?)", ^search_query) or
+            ilike(d.title, ^like_pattern) or
+            ilike(d.file_name, ^like_pattern)
+      )
+    else
+      from(d in query,
+        where:
+          ilike(d.title, ^like_pattern) or
+            ilike(d.file_name, ^like_pattern)
+      )
+    end
+  end
+
+  defp build_safe_tsquery(raw_query) when is_binary(raw_query) do
+    raw_query
+    |> String.replace(~r/[^\p{L}\p{N}\s]/u, " ")
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map(&(&1 <> ":*"))
+    |> Enum.join(" & ")
   end
 
   defp maybe_filter_by_status(query, nil), do: query

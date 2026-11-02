@@ -20,7 +20,7 @@ defmodule Seath.LLM.Ollama do
     model =
       Application.get_env(:seath, __MODULE__, [])
       |> Keyword.get(:model) ||
-        System.get_env("OLLAMA_LLM_MODEL", "llama3.2")
+        System.get_env("OLLAMA_LLM_MODEL", "gemma4")
 
     {base_url, model}
   end
@@ -35,9 +35,24 @@ defmodule Seath.LLM.Ollama do
     model =
       Application.get_env(:seath, __MODULE__, [])
       |> Keyword.get(:vision_model) ||
-        System.get_env("OLLAMA_VISION_MODEL", "llama3.2-vision")
+        System.get_env("OLLAMA_VISION_MODEL", "minicpm-v")
 
     {base_url, model}
+  end
+
+  @doc false
+  def embed_config do
+    base_url =
+      Application.get_env(:seath, __MODULE__, [])
+      |> Keyword.get(:base_url) ||
+        System.get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    embed_model =
+      Application.get_env(:seath, __MODULE__, [])
+      |> Keyword.get(:embed_model) ||
+        System.get_env("OLLAMA_EMBED_MODEL", "bge-m3")
+
+    {base_url, embed_model}
   end
 
   @impl true
@@ -111,11 +126,14 @@ defmodule Seath.LLM.Ollama do
     }
     """
 
+    temperature = Keyword.get(opts, :temperature, 0.0)
+
     body = %{
       model: model,
       stream: false,
+      options: %{temperature: temperature, num_ctx: 16384},
       messages: [%{role: "user", content: prompt}],
-      format: "json"
+      format: classification_schema(available_types)
     }
 
     case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
@@ -139,8 +157,9 @@ defmodule Seath.LLM.Ollama do
     do_think(text, opts, base_url, model)
   end
 
-  defp do_think(text, _opts, base_url, model) do
+  defp do_think(text, opts, base_url, model) do
     language = Application.get_env(:seath, :document_language, "Portuguese")
+    temperature = Keyword.get(opts, :temperature, 0.0)
 
     prompt = """
     You are analyzing a document that was OCR-scanned (may contain errors).
@@ -168,13 +187,16 @@ defmodule Seath.LLM.Ollama do
     body = %{
       model: model,
       stream: false,
+      options: %{temperature: temperature, num_ctx: 16384},
       messages: [%{role: "user", content: prompt}],
-      format: "json"
+      format: thinking_schema()
     }
 
     case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
-      {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
-        parse_thinking(content)
+      {:ok, %{status: 200, body: %{"message" => message}}} ->
+        content = Map.get(message, "content", "")
+        native_thinking = Map.get(message, "thinking", "")
+        parse_thinking(content, native_thinking)
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:unexpected_response, status, body}}
@@ -214,6 +236,8 @@ defmodule Seath.LLM.Ollama do
     language = Application.get_env(:seath, :document_language, "Portuguese")
     tags_list = Enum.join(available_tags, ", ")
     types_list = Enum.join(available_types, ", ")
+    temperature = Keyword.get(opts, :temperature, 0.0)
+    retry_hint = Keyword.get(opts, :retry_hint, "")
 
     similar_context =
       case Keyword.get(opts, :similar_documents) do
@@ -247,7 +271,7 @@ defmodule Seath.LLM.Ollama do
     prompt = """
     I will provide you with the reasoning and extracted entities from a document analysis,
     along with the original OCR text. Use this to classify the document. The document is likely in #{language}.
-    #{similar_context}
+    #{if retry_hint != "", do: "\nIMPORTANT: #{retry_hint}\n", else: ""}#{similar_context}
     <available_document_types>
     #{types_list}
     </available_document_types>
@@ -271,18 +295,22 @@ defmodule Seath.LLM.Ollama do
     Respond with ONLY a JSON object with these fields:
     {
       "title": "a concise, descriptive title for this document (max 80 chars, in the document's language)",
-      "document_type": "the single best matching type from <available_document_types>, or null if none match. Be sure to match: invoices/notas fiscais → invoice, emails → email, contracts → contract, etc.",
+      "document_type": "the single best matching type from <available_document_types>, or null if none match. Be sure to match: invoices/faturas/contas/boletos/notas fiscais → invoice, emails → email, contracts → contract, receipts/comprovantes → receipt, etc.",
       "tags": ["REQUIRED: propose 2-5 tags. Start with best matches from <available_tags>, but feel free to suggest NEW tags if none fit perfectly. More tags = better retrieval. Include the most specific tags possible."],
       "correspondent": "the main sender or issuing company/person of this document, or null if unclear. Use a short, clean name without legal suffixes like Ltda, S.A., GmbH",
-      "involved_parties": [{"name": "Entity Name", "role": "sender or recipient or subject or other"}]
+      "involved_parties": [{"name": "Entity Name", "role": "sender or recipient or subject or other"}],
+      "type_confidence": 0.95,
+      "needs_human_review": false,
+      "is_actionable": true
     }
     """
 
     body = %{
       model: model,
       stream: false,
+      options: %{temperature: temperature, num_ctx: 16384},
       messages: [%{role: "user", content: prompt}],
-      format: "json"
+      format: classification_schema(available_types)
     }
 
     case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 120_000) do
@@ -306,14 +334,14 @@ defmodule Seath.LLM.Ollama do
   end
 
   defp do_verify(classification, text) do
-    text_lower = String.downcase(text)
+    text_norm = normalize_for_grounding(text)
     flagged = []
     verified = []
 
-    # Check correspondent
+    # 1. Normalized token grounding for correspondent
     {verified, flagged} =
       if correspondent = Map.get(classification, :correspondent) do
-        if String.contains?(text_lower, String.downcase(correspondent)) do
+        if grounded_in_text?(correspondent, text_norm) do
           {verified ++ ["correspondent"], flagged}
         else
           {verified,
@@ -329,14 +357,14 @@ defmodule Seath.LLM.Ollama do
         {verified, flagged}
       end
 
-    # Check involved parties
+    # 2. Normalized token grounding for involved parties
     {verified, flagged} =
       case Map.get(classification, :involved_parties, []) do
         parties when is_list(parties) and parties != [] ->
           Enum.reduce(parties, {verified, flagged}, fn party, {v, f} ->
             name = Map.get(party, :name, "") |> to_string()
 
-            if name != "" and String.contains?(text_lower, String.downcase(name)) do
+            if name != "" and grounded_in_text?(name, text_norm) do
               {v ++ ["involved_party:#{name}"], f}
             else
               {v,
@@ -354,52 +382,182 @@ defmodule Seath.LLM.Ollama do
           {verified, flagged}
       end
 
-    # Check document type — at minimum, verify the type name has some grounding
+    # 3. Document type & JEV-like discriminative verification
     {verified, flagged} =
-      if type = Map.get(classification, :document_type) do
-        type_indicators = [
-          String.downcase(type),
-          String.downcase(type) <> " ",
-          " " <> String.downcase(type),
-          String.downcase(type) <> "s",
-          String.downcase(type) <> "ção"
-        ]
-
-        if Enum.any?(type_indicators, &String.contains?(text_lower, &1)) do
-          {verified ++ ["document_type"], flagged}
-        else
-          # Don't flag type if it's a generic/subjective classification
-          {verified ++ ["document_type"], flagged}
-        end
+      if _type = Map.get(classification, :document_type) do
+        {verified ++ ["document_type"], flagged}
       else
         {verified, flagged}
       end
 
+    # 4. Check JEV-like decision flags (needs_human_review / type_confidence)
+    flagged =
+      if Map.get(classification, :needs_human_review) == true do
+        flagged ++
+          [
+            %{
+              field: "jev_decision",
+              reason: "Model flagged document as ambiguous or requiring human review"
+            }
+          ]
+      else
+        flagged
+      end
+
+    # 5. Run System-1 JEV-like discriminative check if Ollama is reachable
+    {verified, flagged} = maybe_run_jev_verify(classification, text, verified, flagged)
+
     passed? = flagged == []
 
-    {:ok, %{passed: passed?, verified_fields: verified, flagged_fields: flagged}}
+    {:ok, %{passed: passed?, verified_fields: Enum.uniq(verified), flagged_fields: flagged}}
   end
+
+  defp maybe_run_jev_verify(classification, text, verified, flagged) do
+    {base_url, model} = config()
+    correspondent = Map.get(classification, :correspondent)
+    doc_type = Map.get(classification, :document_type)
+
+    if is_nil(correspondent) and is_nil(doc_type) do
+      {verified, flagged}
+    else
+      snippet = String.slice(text, 0, 4000)
+
+      prompt = """
+      Evaluate whether the proposed classification accurately matches the document text.
+      Answer strictly as a discriminative judge:
+      - correspondent_verified: true if '#{correspondent || "none"}' is genuinely the sender/issuer or main entity of this document (not a random footer mention or hallucination).
+      - type_verified: true if '#{doc_type || "none"}' is an accurate category for this document.
+      - confidence_score: calibrated probability from 0.0 to 1.0 that this classification is completely accurate.
+
+      <document_text>
+      #{snippet}
+      </document_text>
+      """
+
+      body = %{
+        model: model,
+        stream: false,
+        think: false,
+        options: %{temperature: 0.0, num_ctx: 8192},
+        format: %{
+          type: "object",
+          properties: %{
+            correspondent_verified: %{type: "boolean"},
+            type_verified: %{type: "boolean"},
+            confidence_score: %{type: "number"}
+          },
+          required: ["correspondent_verified", "type_verified", "confidence_score"]
+        },
+        messages: [%{role: "user", content: prompt}]
+      }
+
+      case Req.post("#{base_url}/api/chat", json: body, receive_timeout: 15_000) do
+        {:ok, %{status: 200, body: %{"message" => %{"content" => content}}}} ->
+          case Jason.decode(content) do
+            {:ok,
+             %{
+               "correspondent_verified" => corr_ok,
+               "type_verified" => type_ok,
+               "confidence_score" => score
+             }} ->
+              flagged =
+                if correspondent && corr_ok == false do
+                  flagged ++
+                    [
+                      %{
+                        field: "correspondent",
+                        reason:
+                          "JEV discriminative check rejected '#{correspondent}' as document issuer"
+                      }
+                    ]
+                else
+                  flagged
+                end
+
+              flagged =
+                if doc_type && type_ok == false do
+                  flagged ++
+                    [
+                      %{
+                        field: "document_type",
+                        reason:
+                          "JEV discriminative check rejected '#{doc_type}' as document type"
+                      }
+                    ]
+                else
+                  flagged
+                end
+
+              verified =
+                if score >= 0.8 and corr_ok and type_ok do
+                  verified ++ ["jev_calibrated"]
+                else
+                  verified
+                end
+
+              {verified, flagged}
+
+            _ ->
+              {verified, flagged}
+          end
+
+        _ ->
+          # Gracefully keep deterministic verification if Ollama is offline/unreachable
+          {verified, flagged}
+      end
+    end
+  end
+
+  @legal_suffix_regex ~r/\b(ltda|s\.?a\.?|s\/a|gmbh|ltd|inc|corp|srl|eirl|llc|me|epp|eireli|cia|companhia)\b\.?/i
+
+  defp normalize_for_grounding(str) when is_binary(str) do
+    str
+    |> String.normalize(:nfd)
+    |> String.replace(~r/\p{Mn}/u, "")
+    |> String.downcase()
+    |> String.replace(@legal_suffix_regex, " ")
+    |> String.replace(~r/[^\p{L}\p{N}\s]/u, " ")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp normalize_for_grounding(_), do: ""
+
+  defp grounded_in_text?(entity_name, text_norm) do
+    entity_norm = normalize_for_grounding(entity_name)
+
+    cond do
+      entity_norm == "" ->
+        false
+
+      String.contains?(text_norm, entity_norm) ->
+        true
+
+      true ->
+        # Check if all significant tokens (>= 3 chars) of the normalized entity appear in text
+        tokens =
+          entity_norm
+          |> String.split(" ", trim: true)
+          |> Enum.filter(&(String.length(&1) >= 3))
+
+        tokens != [] and Enum.all?(tokens, &String.contains?(text_norm, &1))
+    end
+  end
+
+  @target_embedding_dim 1536
 
   @impl true
   def embed(text) do
-    {base_url, model} = config()
-
-    # Many models (like gemma4) don't support the /api/embed endpoint.
-    # Fall back to llama3.2 which is always available and supports embeddings.
-    embed_model =
-      case model do
-        "gemma4" <> _ -> "llama3.2"
-        _ -> model
-      end
+    {base_url, embed_model} = embed_config()
 
     body = %{
       model: embed_model,
       input: text
     }
 
-    case Req.post("#{base_url}/api/embed", json: body) do
+    case Req.post("#{base_url}/api/embed", json: body, receive_timeout: 60_000) do
       {:ok, %{status: 200, body: %{"embeddings" => [embedding | _]}}} ->
-        {:ok, embedding}
+        {:ok, align_embedding_dimension(embedding, @target_embedding_dim)}
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:unexpected_response, status, body}}
@@ -409,6 +567,31 @@ defmodule Seath.LLM.Ollama do
 
       {:error, error} ->
         {:error, error}
+    end
+  end
+
+  # Isometrically aligns embedding vectors (e.g. 1024-dim bge-m3 or 768-dim nomic-embed-text)
+  # to 1536 dimensions via zero-padding (which preserves exact cosine similarity & L2 norm)
+  # or L2-normalized truncation if > 1536.
+  defp align_embedding_dimension(vec, target_dim) when is_list(vec) do
+    len = length(vec)
+
+    cond do
+      len == target_dim ->
+        vec
+
+      len < target_dim ->
+        vec ++ List.duplicate(0.0, target_dim - len)
+
+      len > target_dim ->
+        truncated = Enum.take(vec, target_dim)
+        norm = :math.sqrt(Enum.reduce(truncated, 0.0, fn x, acc -> acc + x * x end))
+
+        if norm > 0.0 do
+          Enum.map(truncated, &(&1 / norm))
+        else
+          truncated
+        end
     end
   end
 
@@ -591,6 +774,71 @@ defmodule Seath.LLM.Ollama do
     Enum.join(token_list)
   end
 
+  defp classification_schema(available_types) do
+    doc_type_schema =
+      case available_types do
+        types when is_list(types) and types != [] ->
+          %{enum: Enum.uniq(types) ++ [nil]}
+
+        _ ->
+          %{type: ["string", "null"]}
+      end
+
+    %{
+      type: "object",
+      properties: %{
+        title: %{type: "string"},
+        document_type: doc_type_schema,
+        tags: %{type: "array", items: %{type: "string"}},
+        correspondent: %{type: ["string", "null"]},
+        involved_parties: %{
+          type: "array",
+          items: %{
+            type: "object",
+            properties: %{
+              name: %{type: "string"},
+              role: %{enum: ["sender", "recipient", "subject", "other"]}
+            },
+            required: ["name", "role"]
+          }
+        },
+        type_confidence: %{type: "number"},
+        needs_human_review: %{type: "boolean"},
+        is_actionable: %{type: "boolean"}
+      },
+      required: [
+        "title",
+        "document_type",
+        "tags",
+        "correspondent",
+        "involved_parties",
+        "type_confidence",
+        "needs_human_review",
+        "is_actionable"
+      ]
+    }
+  end
+
+  defp thinking_schema do
+    %{
+      type: "object",
+      properties: %{
+        reasoning: %{type: "string"},
+        extracted_entities: %{type: "array", items: %{type: "string"}},
+        extracted_amounts: %{type: "array", items: %{type: "string"}},
+        extracted_dates: %{type: "array", items: %{type: "string"}},
+        summary: %{type: "string"}
+      },
+      required: [
+        "reasoning",
+        "extracted_entities",
+        "extracted_amounts",
+        "extracted_dates",
+        "summary"
+      ]
+    }
+  end
+
   defp parse_classification(content) do
     case Jason.decode(content) do
       {:ok, %{"title" => title} = result} ->
@@ -617,31 +865,17 @@ defmodule Seath.LLM.Ollama do
     end
   end
 
-  defp parse_thinking(content) do
+  defp parse_thinking(content, native_thinking) do
     case Jason.decode(content) do
       {:ok, result} ->
-        {:ok,
-         %{
-           reasoning: Map.get(result, "reasoning", ""),
-           extracted_entities: Map.get(result, "extracted_entities", []),
-           extracted_amounts: Map.get(result, "extracted_amounts", []),
-           extracted_dates: Map.get(result, "extracted_dates", []),
-           summary: Map.get(result, "summary", "")
-         }}
+        {:ok, build_thinking_result(result, native_thinking)}
 
       {:error, _} ->
         case Regex.run(~r/\{[\s\S]*\}/, content) do
           [json_str] ->
             case Jason.decode(json_str) do
               {:ok, result} ->
-                {:ok,
-                 %{
-                   reasoning: Map.get(result, "reasoning", ""),
-                   extracted_entities: Map.get(result, "extracted_entities", []),
-                   extracted_amounts: Map.get(result, "extracted_amounts", []),
-                   extracted_dates: Map.get(result, "extracted_dates", []),
-                   summary: Map.get(result, "summary", "")
-                 }}
+                {:ok, build_thinking_result(result, native_thinking)}
 
               _ ->
                 {:error, :invalid_response_format}
@@ -651,6 +885,30 @@ defmodule Seath.LLM.Ollama do
             {:error, :invalid_response_format}
         end
     end
+  end
+
+  defp build_thinking_result(result, native_thinking) do
+    json_reasoning = Map.get(result, "reasoning", "")
+
+    reasoning =
+      cond do
+        json_reasoning != "" and native_thinking != "" ->
+          "#{json_reasoning}\n\n[Model Chain-of-Thought]\n#{native_thinking}"
+
+        json_reasoning != "" ->
+          json_reasoning
+
+        true ->
+          native_thinking
+      end
+
+    %{
+      reasoning: reasoning,
+      extracted_entities: Map.get(result, "extracted_entities", []),
+      extracted_amounts: Map.get(result, "extracted_amounts", []),
+      extracted_dates: Map.get(result, "extracted_dates", []),
+      summary: Map.get(result, "summary", "")
+    }
   end
 
   defp build_result(title, result) do
@@ -681,7 +939,10 @@ defmodule Seath.LLM.Ollama do
       document_type: Map.get(result, "document_type"),
       tags: Map.get(result, "tags", []),
       correspondent: correspondent,
-      involved_parties: involved_parties
+      involved_parties: involved_parties,
+      type_confidence: Map.get(result, "type_confidence"),
+      needs_human_review: Map.get(result, "needs_human_review", false),
+      is_actionable: Map.get(result, "is_actionable", false)
     }
   end
 end

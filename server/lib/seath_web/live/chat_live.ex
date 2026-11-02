@@ -191,39 +191,77 @@ defmodule SeathWeb.ChatLive do
     # Extract meaningful keywords for broader search (instead of passing the raw query as a regex)
     search_query = extract_search_query(query)
 
-    # Step 1: Try grep-based retrieval first (exact match for names, IDs, dates)
+    # Step 1: Grep-based retrieval (exact match for names, IDs, dates)
     grep_results =
       Seath.Retrieval.search(search_query,
-        limit: 3,
-        max_docs: 3,
+        limit: 4,
+        max_docs: 4,
         include_docs: true,
         status: "archived"
       )
+      |> Enum.map(fn r ->
+        snippet =
+          case Map.get(r, :matches, []) do
+            matches when is_list(matches) and matches != [] ->
+              matched_lines =
+                matches
+                |> Enum.take(8)
+                |> Enum.map_join("\n", &Map.get(&1, :line, ""))
 
-    grep_count = length(grep_results)
+              head = String.slice((r.document && r.document.ocr_text) || "", 0, 1200)
 
-    # Step 2: Fall back to embedding similarity search if grep didn't return enough results
+              if matched_lines != "" and not String.contains?(head, matched_lines) do
+                head <> "\n...\n" <> matched_lines
+              else
+                String.slice((r.document && r.document.ocr_text) || "", 0, 1800)
+              end
+
+            _ ->
+              String.slice((r.document && r.document.ocr_text) || "", 0, 1800)
+          end
+
+        %{
+          document_id: r.document_id,
+          document: r.document,
+          snippet: snippet,
+          score: 1.0
+        }
+      end)
+
+    # Step 2: Semantic chunk similarity search (always run in hybrid mode for accuracy)
     embedding_results =
-      if grep_count < 3 do
-        case Seath.LLM.embed(query) do
-          {:ok, query_embedding} ->
-            Seath.Embeddings.similarity_search(query_embedding,
-              limit: 3 - grep_count,
-              min_score: 0.5
-            )
-            |> Enum.map(fn %{embedding: _e, document: doc, score: _} ->
-              %{document_id: doc.id, document: doc, match_count: 0, matches: []}
-            end)
+      case Seath.LLM.embed(query) do
+        {:ok, query_embedding} ->
+          Seath.Embeddings.similarity_search(query_embedding,
+            limit: 4,
+            min_score: 0.35
+          )
+          |> Enum.map(fn %{embedding: emb, document: doc, score: score} ->
+            chunk_text =
+              if emb && is_binary(emb.chunk_text) && emb.chunk_text != "" do
+                emb.chunk_text
+              else
+                String.slice(doc.ocr_text || "", 0, 1800)
+              end
 
-          {:error, _reason} ->
-            []
-        end
-      else
-        []
+            %{
+              document_id: doc.id,
+              document: doc,
+              snippet: chunk_text,
+              score: score
+            }
+          end)
+
+        {:error, _reason} ->
+          []
       end
 
-    # Merge results: grep results first (higher priority), embeddings as fallback
-    all_results = grep_results ++ embedding_results
+    # Combine and deduplicate by {document_id, snippet}, keeping top 5 richest passages
+    all_results =
+      (grep_results ++ embedding_results)
+      |> Enum.reject(&is_nil(&1.document))
+      |> Enum.uniq_by(fn r -> {r.document_id, String.slice(r.snippet || "", 0, 200)} end)
+      |> Enum.take(5)
 
     {context_messages, context_docs} =
       case all_results do
@@ -232,10 +270,17 @@ defmodule SeathWeb.ChatLive do
 
         _ ->
           context_parts =
-            Enum.map(all_results, fn %{document: doc} ->
-              text_snippet = String.slice(doc.ocr_text || "", 0, 1000)
-              "--- Document: #{doc.title || doc.file_name} ---\n#{text_snippet}"
+            Enum.map(all_results, fn %{document: doc, snippet: snippet} ->
+              doc = Seath.Repo.preload(doc, [:tags, :document_type, :correspondent])
+              meta = format_doc_meta(doc)
+              "--- Document: #{doc.title || doc.file_name}#{meta} ---\n#{snippet}"
             end)
+
+          unique_docs =
+            all_results
+            |> Enum.map(& &1.document)
+            |> Enum.reject(&is_nil/1)
+            |> Enum.uniq_by(& &1.id)
 
           {[
              %{
@@ -259,7 +304,7 @@ defmodule SeathWeb.ChatLive do
                First, think about which documents are relevant. Then answer the question based only on the provided context. Cite specific documents by title. If the context doesn't contain relevant information, say so.
                """
              }
-           ], Enum.map(all_results, & &1.document) |> Enum.reject(&is_nil/1)}
+           ], unique_docs}
       end
 
     # If no context was found, fall back to a simple query without context
@@ -281,6 +326,19 @@ defmodule SeathWeb.ChatLive do
       end
 
     {:ok, messages, context_docs}
+  end
+
+  defp format_doc_meta(doc) do
+    parts =
+      [
+        doc.document_type && "type: #{doc.document_type.name}",
+        doc.correspondent && "correspondent: #{doc.correspondent.name}",
+        is_list(doc.tags) && doc.tags != [] &&
+          "tags: #{Enum.map_join(doc.tags, ", ", & &1.name)}"
+      ]
+      |> Enum.filter(&is_binary/1)
+
+    if parts == [], do: "", else: " (#{Enum.join(parts, ", ")})"
   end
 
   defp parse_arguments(arguments) when is_map(arguments), do: arguments

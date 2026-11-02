@@ -153,11 +153,13 @@ config :seath, Seath.OCR.Azure,
 
 config :seath, Seath.OCR.Ollama,
   base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
-  model: System.get_env("OLLAMA_OCR_MODEL", "llama3.2-vision")
+  model: System.get_env("OLLAMA_OCR_MODEL", "minicpm-v")
 
 config :seath, Seath.LLM.Ollama,
   base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
-  model: System.get_env("OLLAMA_LLM_MODEL", "gemma4")
+  model: System.get_env("OLLAMA_LLM_MODEL", "gemma4"),
+  vision_model: System.get_env("OLLAMA_VISION_MODEL", "minicpm-v"),
+  embed_model: System.get_env("OLLAMA_EMBED_MODEL", "bge-m3")
 
 config :seath, Seath.LLM.OpenAI,
   api_key: System.get_env("OPENAI_API_KEY"),

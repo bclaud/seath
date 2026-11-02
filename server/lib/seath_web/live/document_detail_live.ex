@@ -247,12 +247,26 @@ defmodule SeathWeb.DocumentDetailLive do
                     <label class="block text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
                       Status
                     </label>
-                    <span class={[
-                      "inline-block px-2.5 py-0.5 rounded-full text-xs font-medium",
-                      status_badge_class(@doc.status)
-                    ]}>
-                      {@doc.status}
-                    </span>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <span class={[
+                        "inline-block px-2.5 py-0.5 rounded-full text-xs font-medium",
+                        status_badge_class(@doc.status)
+                      ]}>
+                        {@doc.status}
+                      </span>
+                      <span
+                        :if={jev_calibrated?(@doc)}
+                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"
+                      >
+                        <.icon name="hero-shield-check" class="w-3.5 h-3.5" /> JEV Calibrated
+                      </span>
+                      <span
+                        :if={actionable_doc?(@doc)}
+                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                      >
+                        <.icon name="hero-bolt" class="w-3.5 h-3.5" /> Actionable
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
@@ -302,6 +316,52 @@ defmodule SeathWeb.DocumentDetailLive do
                   </div>
                 </div>
               <% end %>
+            </div>
+
+            <%!-- AI Insights section --%>
+            <% insights = extract_ai_insights(@doc) %>
+            <div
+              :if={insights.summary != "" or insights.amounts != [] or insights.dates != []}
+              class="bg-white rounded-xl border p-6 space-y-4"
+            >
+              <h3 class="text-sm font-semibold text-base-content">AI Extracted Insights</h3>
+              <div :if={insights.summary != ""}>
+                <label class="block text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                  Summary
+                </label>
+                <p class="text-sm text-base-content/90">{insights.summary}</p>
+              </div>
+              <div
+                :if={insights.amounts != [] or insights.dates != []}
+                class="flex flex-wrap gap-6"
+              >
+                <div :if={insights.amounts != []}>
+                  <label class="block text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                    Amounts
+                  </label>
+                  <div class="flex flex-wrap gap-1.5">
+                    <span
+                      :for={amt <- insights.amounts}
+                      class="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-medium"
+                    >
+                      {amt}
+                    </span>
+                  </div>
+                </div>
+                <div :if={insights.dates != []}>
+                  <label class="block text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                    Dates
+                  </label>
+                  <div class="flex flex-wrap gap-1.5">
+                    <span
+                      :for={dt <- insights.dates}
+                      class="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-medium"
+                    >
+                      {dt}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <%!-- Tags section --%>
@@ -545,4 +605,46 @@ defmodule SeathWeb.DocumentDetailLive do
   defp format_datetime(dt) do
     Calendar.strftime(dt, "%b %d, %Y %H:%M")
   end
+
+  defp jev_calibrated?(doc) do
+    vf =
+      (doc.verification_data &&
+         (doc.verification_data["verified_fields"] || doc.verification_data[:verified_fields])) ||
+        []
+
+    is_list(vf) and "jev_calibrated" in vf
+  end
+
+  defp actionable_doc?(doc) do
+    vd = doc.verification_data || %{}
+
+    vd["is_actionable"] == true or vd[:is_actionable] == true or
+      case parse_reasoning_json(doc.llm_reasoning) do
+        %{"classification" => %{"is_actionable" => true}} -> true
+        _ -> false
+      end
+  end
+
+  defp extract_ai_insights(doc) do
+    case parse_reasoning_json(doc.llm_reasoning) do
+      %{"thinking" => thinking} when is_map(thinking) ->
+        %{
+          summary: to_string(thinking["summary"] || ""),
+          amounts: List.wrap(thinking["extracted_amounts"] || []),
+          dates: List.wrap(thinking["extracted_dates"] || [])
+        }
+
+      _ ->
+        %{summary: "", amounts: [], dates: []}
+    end
+  end
+
+  defp parse_reasoning_json(bin) when is_binary(bin) and bin != "" do
+    case Jason.decode(bin) do
+      {:ok, map} when is_map(map) -> map
+      _ -> %{}
+    end
+  end
+
+  defp parse_reasoning_json(_), do: %{}
 end

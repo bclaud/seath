@@ -50,7 +50,8 @@ defmodule Seath.Workers.ClassifyWorker do
              confidence: confidence
            }} ->
             # Apply classification to document
-            {:ok, doc} = store_classification_data(doc, thinking, verification, confidence)
+            {:ok, doc} =
+              store_classification_data(doc, classification, thinking, verification, confidence)
 
             cond do
               confidence >= @high_confidence_threshold ->
@@ -115,24 +116,17 @@ defmodule Seath.Workers.ClassifyWorker do
     tag_names = Enum.map(tags, & &1.name)
     type_names = Enum.map(types, & &1.name)
 
-    # Search for similar archived documents
-    similar_docs =
-      text
-      |> Retrieval.search(
-        limit: 3,
-        max_docs: 3,
-        include_docs: true,
-        status: "archived"
-      )
+    # Search for similar archived documents via semantic embeddings (with keyword fallback)
+    similar_docs = find_similar_archived_documents(text)
 
     base_opts = if similar_docs != [], do: [similar_documents: similar_docs], else: []
 
-    # Adjust temperature for retries
+    # Deterministic temperature on first pass; slight exploration only on retry
     base_opts =
       if attempt > 1 do
-        Keyword.put(base_opts, :temperature, 0.3)
+        Keyword.put(base_opts, :temperature, 0.2)
       else
-        Keyword.put(base_opts, :temperature, 0.1)
+        Keyword.put(base_opts, :temperature, 0.0)
       end
 
     # Phase 1: Chunk and think
@@ -378,11 +372,60 @@ defmodule Seath.Workers.ClassifyWorker do
     }
 
   # ============================================================================
-  # Heuristic Confidence Scoring (Item 4)
+  # Semantic Retrieval for Few-Shot Classification Grounding
+  # ============================================================================
+
+  defp find_similar_archived_documents(text) when is_binary(text) do
+    snippet = String.slice(text, 0, 4_000)
+
+    vector_docs =
+      try do
+        case Seath.LLM.embed(snippet) do
+          {:ok, embedding} when is_list(embedding) ->
+            Seath.Embeddings.similarity_search(embedding, limit: 3, min_score: 0.65)
+            |> Enum.map(fn %{document: doc} = item ->
+              preloaded = Seath.Repo.preload(doc, [:tags, :document_type, :correspondent])
+              %{item | document: preloaded}
+            end)
+
+          _ ->
+            []
+        end
+      rescue
+        _ -> []
+      end
+
+    if vector_docs != [] do
+      vector_docs
+    else
+      # Fallback: extract first meaningful short line for keyword search
+      first_line =
+        text
+        |> String.split("\n", trim: true)
+        |> Enum.map(&String.trim/1)
+        |> Enum.find("", &(String.length(&1) >= 4 and String.length(&1) <= 80))
+
+      if first_line != "" do
+        Retrieval.search(first_line,
+          limit: 3,
+          max_docs: 3,
+          include_docs: true,
+          status: "archived"
+        )
+      else
+        []
+      end
+    end
+  end
+
+  defp find_similar_archived_documents(_), do: []
+
+  # ============================================================================
+  # Heuristic & JEV-like Calibrated Confidence Scoring (Item 4)
   # ============================================================================
 
   def compute_confidence(text, classification, similar_docs_count, verification) do
-    text_lower = String.downcase(text)
+    text_norm = normalize_for_grounding(text)
 
     # 1. Type match score (0.0 - 0.3)
     type_match =
@@ -390,14 +433,23 @@ defmodule Seath.Workers.ClassifyWorker do
         existing_types = DocumentTypes.list_types()
         type_lower = String.downcase(type)
 
-        if Enum.any?(existing_types, fn t ->
-             String.downcase(t.name) == type_lower or
-               String.downcase(t.name) |> String.starts_with?(type_lower) or
-               type_lower |> String.starts_with?(String.downcase(t.name))
-           end) do
-          0.3
-        else
-          0.15
+        base_type_score =
+          if Enum.any?(existing_types, fn t ->
+               String.downcase(t.name) == type_lower or
+                 String.downcase(t.name) |> String.starts_with?(type_lower) or
+                 type_lower |> String.starts_with?(String.downcase(t.name))
+             end) do
+            0.3
+          else
+            0.15
+          end
+
+        case Map.get(classification, :type_confidence) do
+          c when is_number(c) and c >= 0.0 and c <= 1.0 ->
+            base_type_score * (0.5 + 0.5 * c)
+
+          _ ->
+            base_type_score
         end
       else
         0.1
@@ -405,16 +457,19 @@ defmodule Seath.Workers.ClassifyWorker do
 
     # 2. Entity grounding score (0.0 - 0.25)
     entity_grounding =
-      compute_entity_grounding(classification, text_lower)
+      compute_entity_grounding(classification, text_norm)
 
     # 3. Context quality score (0.0 - 0.2) - more similar docs = better context
-    context_quality = min(similar_docs_count / 5, 1.0) * 0.2
+    context_quality = min(similar_docs_count / 3, 1.0) * 0.2
 
-    # 4. Verification score (0.0 - 0.25)
+    # 4. Verification score (0.0 - 0.25, +0.05 bonus if JEV calibrated)
     verification_score =
       case verification do
         nil ->
           0.1
+
+        %{passed: true, verified_fields: vf} when is_list(vf) ->
+          if "jev_calibrated" in vf, do: 0.3, else: 0.25
 
         %{passed: true} ->
           0.25
@@ -431,33 +486,72 @@ defmodule Seath.Workers.ClassifyWorker do
     internal_consistency =
       compute_internal_consistency(classification)
 
+    # 6. JEV-like needs_human_review penalty
+    review_penalty =
+      if Map.get(classification, :needs_human_review) == true, do: -0.15, else: 0.0
+
     scores = %{
       type_match: type_match,
       entity_grounding: entity_grounding,
       context_quality: context_quality,
       verification: verification_score,
-      internal_consistency: internal_consistency
+      internal_consistency: internal_consistency,
+      review_penalty: review_penalty
     }
 
-    Map.values(scores) |> Enum.sum() |> min(1.0) |> Float.round(2)
+    Map.values(scores) |> Enum.sum() |> max(0.0) |> min(1.0) |> Float.round(2)
   end
 
-  defp compute_entity_grounding(classification, text_lower) do
+  defp compute_entity_grounding(classification, text_norm) do
     entities =
       ([Map.get(classification, :correspondent)] ++
          (Map.get(classification, :involved_parties, []) |> Enum.map(& &1.name)))
       |> Enum.reject(&is_nil/1)
       |> Enum.reject(&(&1 == ""))
-      |> Enum.map(&String.downcase/1)
 
     case entities do
       [] ->
         0.15
 
       ents ->
-        found = Enum.count(ents, fn ent -> String.contains?(text_lower, ent) end)
+        found = Enum.count(ents, fn ent -> grounded_in_text?(ent, text_norm) end)
         ratio = found / length(ents)
         ratio * 0.25
+    end
+  end
+
+  @legal_suffixes ~r/\b(ltda|s\.?a\.?|s\/a|gmbh|ltd|inc|corp|srl|eirl|llc|co\b|company|limited|associação|fundacao|me|epp|eireli)\b\.?/i
+
+  defp normalize_for_grounding(str) when is_binary(str) do
+    str
+    |> String.normalize(:nfd)
+    |> String.replace(~r/\p{Mn}/u, "")
+    |> String.downcase()
+    |> String.replace(@legal_suffixes, " ")
+    |> String.replace(~r/[^\p{L}\p{N}\s]/u, " ")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp normalize_for_grounding(_), do: ""
+
+  defp grounded_in_text?(entity_name, text_norm) do
+    entity_norm = normalize_for_grounding(entity_name)
+
+    cond do
+      entity_norm == "" ->
+        false
+
+      String.contains?(text_norm, entity_norm) ->
+        true
+
+      true ->
+        tokens =
+          entity_norm
+          |> String.split(" ", trim: true)
+          |> Enum.filter(&(String.length(&1) >= 3))
+
+        tokens != [] and Enum.all?(tokens, &String.contains?(text_norm, &1))
     end
   end
 
@@ -481,8 +575,6 @@ defmodule Seath.Workers.ClassifyWorker do
   # ============================================================================
   # Entity Normalization (Item 6)
   # ===========================================================================
-
-  @legal_suffixes ~r/\b(ltda|s\.?a\.?|gmbh|ltd|inc|corp|srl|eirl|llc|co\b|company|limited|associação|fundacao)\b\.?/i
 
   def normalize_name(name) when is_binary(name) do
     name
@@ -603,10 +695,27 @@ defmodule Seath.Workers.ClassifyWorker do
   # Data Storage
   # ===========================================================================
 
-  defp store_classification_data(doc, thinking, verification, confidence) do
+  defp store_classification_data(doc, classification, thinking, verification, confidence) do
+    jev_meta = %{
+      type_confidence: Map.get(classification, :type_confidence),
+      needs_human_review: Map.get(classification, :needs_human_review, false),
+      is_actionable: Map.get(classification, :is_actionable, false)
+    }
+
+    enriched_verification =
+      (verification || %{})
+      |> Map.put(:is_actionable, jev_meta.is_actionable)
+      |> Map.put(:needs_human_review, jev_meta.needs_human_review)
+      |> Map.put(:type_confidence, jev_meta.type_confidence)
+
     attrs = %{
-      llm_reasoning: Jason.encode!(%{thinking: thinking, verification: verification}),
-      verification_data: verification,
+      llm_reasoning:
+        Jason.encode!(%{
+          thinking: thinking,
+          verification: enriched_verification,
+          classification: jev_meta
+        }),
+      verification_data: enriched_verification,
       confidence: confidence
     }
 

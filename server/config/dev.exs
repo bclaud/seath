@@ -92,3 +92,8 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Default offline local providers in development
+config :seath, :ocr_provider, Seath.OCR.Ollama
+config :seath, :llm_provider, Seath.LLM.Ollama
+config :seath, :chat_provider, Seath.LLM.Ollama

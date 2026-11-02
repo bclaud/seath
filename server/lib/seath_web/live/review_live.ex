@@ -509,17 +509,82 @@ defmodule SeathWeb.ReviewLive do
                   </div>
                 </div>
 
-                <%!-- Classification attempts --%>
-                <div
-                  :if={
-                    @selected_doc.classification_attempts &&
-                      @selected_doc.classification_attempts > 0
-                  }
-                  class="flex items-end"
-                >
-                  <span class="text-xs text-base-content/70">
+                <%!-- Classification attempts & JEV badges --%>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span
+                    :if={
+                      @selected_doc.classification_attempts &&
+                        @selected_doc.classification_attempts > 0
+                    }
+                    class="text-xs text-base-content/70"
+                  >
                     Attempt {@selected_doc.classification_attempts}
                   </span>
+                  <span
+                    :if={jev_calibrated?(@selected_doc)}
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"
+                  >
+                    <.icon name="hero-shield-check" class="w-3.5 h-3.5" /> JEV Calibrated
+                  </span>
+                  <span
+                    :if={actionable_doc?(@selected_doc)}
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                  >
+                    <.icon name="hero-bolt" class="w-3.5 h-3.5" /> Actionable
+                  </span>
+                  <span
+                    :if={needs_human_review?(@selected_doc)}
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800"
+                  >
+                    <.icon name="hero-eye" class="w-3.5 h-3.5" /> Needs Human Review
+                  </span>
+                </div>
+              </div>
+
+              <%!-- AI Summary & Extracted Insights --%>
+              <% insights = extract_ai_insights(@selected_doc) %>
+              <div
+                :if={
+                  insights.summary != "" or insights.amounts != [] or insights.dates != []
+                }
+                class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3"
+              >
+                <div :if={insights.summary != ""}>
+                  <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                    AI Summary
+                  </p>
+                  <p class="text-sm text-base-content/90">{insights.summary}</p>
+                </div>
+                <div
+                  :if={insights.amounts != [] or insights.dates != []}
+                  class="flex flex-wrap gap-6 pt-1"
+                >
+                  <div :if={insights.amounts != []}>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                      Extracted Amounts
+                    </p>
+                    <div class="flex flex-wrap gap-1.5">
+                      <span
+                        :for={amt <- insights.amounts}
+                        class="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-medium"
+                      >
+                        {amt}
+                      </span>
+                    </div>
+                  </div>
+                  <div :if={insights.dates != []}>
+                    <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                      Extracted Dates
+                    </p>
+                    <div class="flex flex-wrap gap-1.5">
+                      <span
+                        :for={dt <- insights.dates}
+                        class="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-medium"
+                      >
+                        {dt}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -527,8 +592,12 @@ defmodule SeathWeb.ReviewLive do
               <div
                 :if={
                   @selected_doc.verification_data &&
-                    @selected_doc.verification_data["passed"] == false &&
-                    length(@selected_doc.verification_data["flagged_fields"] || []) > 0
+                    (@selected_doc.verification_data["passed"] == false or
+                       @selected_doc.verification_data[:passed] == false) &&
+                    length(
+                      @selected_doc.verification_data["flagged_fields"] ||
+                        @selected_doc.verification_data[:flagged_fields] || []
+                    ) > 0
                 }
                 class="mt-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
               >
@@ -540,8 +609,12 @@ defmodule SeathWeb.ReviewLive do
                   <div>
                     <p class="text-sm font-medium text-yellow-800">Verification Flags</p>
                     <ul class="mt-1 text-sm text-yellow-700 list-disc list-inside">
-                      <li :for={field <- @selected_doc.verification_data["flagged_fields"]}>
-                        {field} not found in document text
+                      <li :for={
+                        field <-
+                          @selected_doc.verification_data["flagged_fields"] ||
+                            @selected_doc.verification_data[:flagged_fields] || []
+                      }>
+                        {format_flagged_field(field)}
                       </li>
                     </ul>
                   </div>
@@ -720,4 +793,82 @@ defmodule SeathWeb.ReviewLive do
   defp format_file_size(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_file_size(bytes) when bytes < 1_048_576, do: "#{div(bytes, 1024)} KB"
   defp format_file_size(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
+  defp format_flagged_field(%{"field" => field, "reason" => reason}) do
+    "#{field}: #{reason}"
+  end
+
+  defp format_flagged_field(%{field: field, reason: reason}) do
+    "#{field}: #{reason}"
+  end
+
+  defp format_flagged_field(%{"field" => field}) do
+    "#{field} not found in document text"
+  end
+
+  defp format_flagged_field(%{field: field}) do
+    "#{field} not found in document text"
+  end
+
+  defp format_flagged_field(field) when is_binary(field) do
+    "#{field} not found in document text"
+  end
+
+  defp format_flagged_field(other), do: inspect(other)
+
+  defp jev_calibrated?(doc) do
+    vf =
+      (doc.verification_data &&
+         (doc.verification_data["verified_fields"] || doc.verification_data[:verified_fields])) ||
+        []
+
+    is_list(vf) and "jev_calibrated" in vf
+  end
+
+  defp actionable_doc?(doc) do
+    vd = doc.verification_data || %{}
+
+    vd["is_actionable"] == true or vd[:is_actionable] == true or
+      extract_classification_bool(doc, "is_actionable")
+  end
+
+  defp needs_human_review?(doc) do
+    vd = doc.verification_data || %{}
+
+    vd["needs_human_review"] == true or vd[:needs_human_review] == true or
+      extract_classification_bool(doc, "needs_human_review")
+  end
+
+  defp extract_classification_bool(doc, key) do
+    case parse_reasoning_json(doc.llm_reasoning) do
+      %{"classification" => class_map} when is_map(class_map) ->
+        Map.get(class_map, key) == true
+
+      _ ->
+        false
+    end
+  end
+
+  defp extract_ai_insights(doc) do
+    case parse_reasoning_json(doc.llm_reasoning) do
+      %{"thinking" => thinking} when is_map(thinking) ->
+        %{
+          summary: to_string(thinking["summary"] || ""),
+          amounts: List.wrap(thinking["extracted_amounts"] || []),
+          dates: List.wrap(thinking["extracted_dates"] || [])
+        }
+
+      _ ->
+        %{summary: "", amounts: [], dates: []}
+    end
+  end
+
+  defp parse_reasoning_json(bin) when is_binary(bin) and bin != "" do
+    case Jason.decode(bin) do
+      {:ok, map} when is_map(map) -> map
+      _ -> %{}
+    end
+  end
+
+  defp parse_reasoning_json(_), do: %{}
 end

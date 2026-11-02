@@ -70,12 +70,30 @@ defmodule Seath.LLM.Tools do
   def execute("search_documents", %{"query" => query} = args) do
     max_results = Map.get(args, "max_results", 5)
 
-    results =
+    grep_results =
       Seath.Retrieval.search(query,
         limit: max_results,
         max_docs: max_results,
         include_docs: true
       )
+
+    # Supplement with PostgreSQL full-text / ilike search if grep returns fewer than max_results
+    results =
+      if length(grep_results) < max_results do
+        seen_ids = MapSet.new(grep_results, & &1.document_id)
+
+        db_docs =
+          Seath.Documents.search(query)
+          |> Enum.reject(&MapSet.member?(seen_ids, &1.id))
+          |> Enum.take(max_results - length(grep_results))
+          |> Enum.map(fn doc ->
+            %{document_id: doc.id, document: doc, match_count: 1, matches: []}
+          end)
+
+        grep_results ++ db_docs
+      else
+        grep_results
+      end
 
     format_search_results(results)
   end
@@ -86,7 +104,7 @@ defmodule Seath.LLM.Tools do
     case Seath.LLM.embed(query) do
       {:ok, embedding} ->
         results =
-          Seath.Embeddings.similarity_search(embedding, limit: max_results, min_score: 0.5)
+          Seath.Embeddings.similarity_search(embedding, limit: max_results, min_score: 0.35)
 
         format_semantic_results(results)
 
@@ -102,18 +120,22 @@ defmodule Seath.LLM.Tools do
   defp format_search_results(results) when is_list(results) and results != [] do
     mapped =
       Enum.map(results, fn r ->
-        doc = r.document
+        doc = r[:document]
 
         if doc do
-          {"- #{doc.title || doc.file_name}\n  #{String.slice(doc.ocr_text || "", 0, 300)}", doc}
+          doc = Seath.Repo.preload(doc, [:tags, :document_type, :correspondent])
+          meta = format_doc_metadata(doc)
+          snippet = extract_match_context(doc, Map.get(r, :matches, []))
+
+          {"- #{doc.title || doc.file_name}#{meta}\n  #{snippet}", doc}
         else
-          {"- Unknown document (#{r.document_id})", nil}
+          {"- Unknown document (#{r[:document_id]})", nil}
         end
       end)
 
     {formatted, sources} = Enum.unzip(mapped)
-    sources = Enum.reject(sources, &is_nil/1)
-    {:ok, Enum.join(formatted, "\n"), sources}
+    sources = Enum.reject(sources, &is_nil/1) |> Enum.uniq_by(& &1.id)
+    {:ok, Enum.join(formatted, "\n\n"), sources}
   end
 
   defp format_search_results(_results) do
@@ -123,10 +145,23 @@ defmodule Seath.LLM.Tools do
   defp format_semantic_results(results) when is_list(results) and results != [] do
     mapped =
       Enum.map(results, fn r ->
-        doc = r.document
+        doc = r[:document]
+        emb = r[:embedding]
 
         if doc do
-          {"- #{doc.title || doc.file_name} (relevance: #{Float.round(r.score, 2)})\n  #{String.slice(doc.ocr_text || "", 0, 300)}",
+          doc = Seath.Repo.preload(doc, [:tags, :document_type, :correspondent])
+          meta = format_doc_metadata(doc)
+
+          chunk_str =
+            case emb && emb.chunk_text do
+              text when is_binary(text) and text != "" ->
+                text
+
+              _ ->
+                String.slice(doc.ocr_text || "", 0, 1800)
+            end
+
+          {"- #{doc.title || doc.file_name}#{meta} (relevance: #{Float.round(r.score, 2)})\n  #{chunk_str}",
            doc}
         else
           {"- Unknown document (relevance: #{Float.round(r.score, 2)})", nil}
@@ -134,11 +169,44 @@ defmodule Seath.LLM.Tools do
       end)
 
     {formatted, sources} = Enum.unzip(mapped)
-    sources = Enum.reject(sources, &is_nil/1)
-    {:ok, Enum.join(formatted, "\n"), sources}
+    sources = Enum.reject(sources, &is_nil/1) |> Enum.uniq_by(& &1.id)
+    {:ok, Enum.join(formatted, "\n\n"), sources}
   end
 
   defp format_semantic_results(_results) do
     {:ok, "No semantically similar documents found.", []}
+  end
+
+  defp format_doc_metadata(doc) do
+    parts =
+      [
+        doc.document_type && "type: #{doc.document_type.name}",
+        doc.correspondent && "correspondent: #{doc.correspondent.name}",
+        doc.tags != [] && is_list(doc.tags) &&
+          "tags: #{Enum.map_join(doc.tags, ", ", & &1.name)}"
+      ]
+      |> Enum.filter(&is_binary/1)
+
+    if parts == [], do: "", else: " [#{Enum.join(parts, " | ")}]"
+  end
+
+  defp extract_match_context(doc, matches) when is_list(matches) and matches != [] do
+    matched_lines =
+      matches
+      |> Enum.take(8)
+      |> Enum.map_join("\n  ", fn m -> Map.get(m, :line, "") end)
+      |> String.trim()
+
+    header_slice = String.slice(doc.ocr_text || "", 0, 1200)
+
+    if matched_lines != "" and not String.contains?(header_slice, matched_lines) do
+      "#{header_slice}\n  ...\n  Matched lines:\n  #{matched_lines}"
+    else
+      String.slice(doc.ocr_text || "", 0, 1800)
+    end
+  end
+
+  defp extract_match_context(doc, _matches) do
+    String.slice(doc.ocr_text || "", 0, 1800)
   end
 end

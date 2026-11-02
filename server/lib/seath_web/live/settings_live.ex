@@ -14,7 +14,7 @@ defmodule SeathWeb.SettingsLive do
      |> assign(:azure_endpoint, s.azure_endpoint || "")
      |> assign(:azure_key, s.azure_key || "")
      |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
-     |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llama3.2-vision")
+     |> assign(:ollama_ocr_model, s.ollama_ocr_model || "minicpm-v")
      |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma4")
      |> assign(:ollama_chat_model, s.ollama_chat_model || "gemma4")
      |> assign(:openai_api_key, s.openai_api_key || "")
@@ -63,7 +63,7 @@ defmodule SeathWeb.SettingsLive do
       azure_endpoint: params["azure_endpoint"] || "",
       azure_key: params["azure_key"] || "",
       ollama_base_url: params["ollama_base_url"] || "http://localhost:11434",
-      ollama_ocr_model: params["ollama_ocr_model"] || "llama3.2-vision",
+      ollama_ocr_model: params["ollama_ocr_model"] || "minicpm-v",
       ollama_llm_model: params["ollama_llm_model"] || "gemma4",
       ollama_chat_model: params["ollama_chat_model"] || "gemma4",
       openai_api_key: params["openai_api_key"] || "",
@@ -81,7 +81,7 @@ defmodule SeathWeb.SettingsLive do
          |> assign(:azure_endpoint, s.azure_endpoint || "")
          |> assign(:azure_key, s.azure_key || "")
          |> assign(:ollama_base_url, s.ollama_base_url || "http://localhost:11434")
-         |> assign(:ollama_ocr_model, s.ollama_ocr_model || "llama3.2-vision")
+         |> assign(:ollama_ocr_model, s.ollama_ocr_model || "minicpm-v")
          |> assign(:ollama_llm_model, s.ollama_llm_model || "gemma4")
          |> assign(:ollama_chat_model, s.ollama_chat_model || "gemma4")
          |> assign(:openai_api_key, s.openai_api_key || "")
@@ -214,7 +214,7 @@ defmodule SeathWeb.SettingsLive do
                 <div>
                   <p class="text-sm font-semibold text-base-content">Ollama &mdash; Local</p>
                   <p class="text-xs text-base-content/70">
-                    Vision model. Recommended: <strong>llama3.2-vision</strong>
+                    Vision model. Recommended: <strong>minicpm-v</strong>
                   </p>
                 </div>
               </label>
@@ -414,7 +414,7 @@ defmodule SeathWeb.SettingsLive do
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base-content font-mono"
                   />
                   <p class="text-xs text-base-content/70 mt-1">
-                    Vision model. <strong>llama3.2-vision</strong>
+                    Vision model. <strong>minicpm-v</strong>
                   </p>
                 </div>
                 <div>

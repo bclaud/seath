@@ -48,5 +48,33 @@ defmodule Seath.LLM.ToolsTest do
       assert is_binary(result)
       assert sources == []
     end
+
+    test "semantic_search returns full chunk_text and document metadata" do
+      {:ok, doc} =
+        Seath.Documents.create_document(%{
+          file_path: "/uploads/contract.pdf",
+          file_name: "contract.pdf",
+          file_type: "application/pdf",
+          file_size: 2048,
+          title: "Solar Panel Installation Contract",
+          ocr_text: String.duplicate("Header text. ", 40) <> "Final clause: Warranty is 25 years.",
+          status: "awaiting_review"
+        })
+
+      {:ok, doc} = Seath.Documents.transition_status(doc, "archived")
+      {:ok, vec} = Seath.LLM.embed("warranty period")
+
+      Seath.Embeddings.store_embedding!(doc.id, vec, "bge-m3",
+        chunk_index: 1,
+        chunk_text: "Final clause: Warranty is 25 years."
+      )
+
+      assert {:ok, formatted, [source]} =
+               Tools.execute("semantic_search", %{"query" => "warranty period"})
+
+      assert source.id == doc.id
+      assert formatted =~ "Solar Panel Installation Contract"
+      assert formatted =~ "Final clause: Warranty is 25 years."
+    end
   end
 end

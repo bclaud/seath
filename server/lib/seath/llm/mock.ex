@@ -57,7 +57,12 @@ defmodule Seath.LLM.Mock do
   end
 
   @impl true
-  def embed(_text), do: {:ok, Enum.map(1..1536, fn _ -> :rand.uniform() - 0.5 end)}
+  def embed(text) do
+    {:ok,
+     Enum.map(1..1536, fn idx ->
+       (:erlang.phash2({text, idx}, 10_000) - 5_000) / 10_000.0
+     end)}
+  end
 
   @impl true
   def chat(_messages, _opts) do
