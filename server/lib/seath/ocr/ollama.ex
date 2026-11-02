@@ -39,10 +39,21 @@ defmodule Seath.OCR.Ollama do
 
     ext = file_path |> Path.extname() |> String.downcase()
 
-    if ext in @image_extensions do
+    if ext in @image_extensions or raw_image_file?(file_path) do
       extract_image(file_path, base_url, model)
     else
       extract_pdf(file_path, base_url, model)
+    end
+  end
+
+  defp raw_image_file?(file_path) do
+    case File.open(file_path, [:read, :binary], fn io -> IO.binread(io, 8) end) do
+      {:ok, <<0x89, "PNG", "\r\n", 0x1A, "\n">>} -> true
+      {:ok, <<0xFF, 0xD8, 0xFF, _::binary>>} -> true
+      {:ok, <<"II*", 0, _::binary>>} -> true
+      {:ok, <<"MM", 0, "*", _::binary>>} -> true
+      {:ok, <<"RIFF", _::binary>>} -> true
+      _ -> false
     end
   end
 
@@ -92,19 +103,18 @@ defmodule Seath.OCR.Ollama do
   defp merge_result({:error, r}, {:error, _}, _sep), do: {:error, r}
 
   # Extract embedded images from PDF using pdfimages at their native resolution,
-  # filtering out tiny icons, logos, and decorative borders (< 20 KB).
-  defp extract_embedded_images(file_path, base_url, model) do
+  # filtering out tiny icons, logos, and decorative borders (< 20 KB) by default.
+  defp extract_embedded_images(file_path, base_url, model, min_bytes \\ @min_embedded_image_bytes) do
     tmp_dir = Path.join(System.tmp_dir!(), "seath_img_#{Ecto.UUID.generate()}")
     File.mkdir_p!(tmp_dir)
 
-    case System.cmd("pdfimages", ["-png", file_path, "#{tmp_dir}/img"]) do
+    case System.cmd("pdfimages", ["-png", file_path, Path.join(tmp_dir, "img")]) do
       {_, 0} ->
         images =
           tmp_dir
-          |> Path.join("*")
+          |> Path.join("*.png")
           |> Path.wildcard()
-          |> Enum.reject(fn p -> Path.extname(p) in ~w(.txt .xml) end)
-          |> Enum.filter(&substantial_image?/1)
+          |> Enum.filter(&substantial_image?(&1, min_bytes))
           |> Enum.sort()
 
         if images == [] do
@@ -133,9 +143,9 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
-  defp substantial_image?(path) do
+  defp substantial_image?(path, min_bytes) do
     case File.stat(path) do
-      {:ok, %File.Stat{size: size}} -> size >= @min_embedded_image_bytes
+      {:ok, %File.Stat{size: size}} -> size >= min_bytes
       _ -> false
     end
   end
@@ -151,22 +161,26 @@ defmodule Seath.OCR.Ollama do
     end
   end
 
-  # Convert PDF pages to images at 300 DPI and OCR each via vision model
+  # Convert PDF pages to images at 300 DPI and OCR each via vision model.
+  # Note: pdftoppm's last argument is an output *prefix* (e.g. "#{tmp_dir}/page"),
+  # which produces "#{tmp_dir}/page-1.png", "#{tmp_dir}/page-2.png", etc.
   defp extract_pdf_via_vision(file_path, base_url, model) do
     tmp_dir = Path.join(System.tmp_dir!(), "seath_ocr_#{Ecto.UUID.generate()}")
+    File.mkdir_p!(tmp_dir)
+    output_prefix = Path.join(tmp_dir, "page")
 
-    # 300 DPI provides good quality for OCR without excessive file sizes
-    case System.cmd("pdftoppm", ["-png", "-r", "300", file_path, tmp_dir]) do
+    # 300 DPI provides high quality for OCR without excessive file sizes
+    case System.cmd("pdftoppm", ["-png", "-r", "300", file_path, output_prefix]) do
       {_, 0} ->
         pages =
           tmp_dir
-          |> Path.join("*")
+          |> Path.join("page*.png")
           |> Path.wildcard()
           |> Enum.sort()
 
         if pages == [] do
           File.rm_rf!(tmp_dir)
-          {:error, :no_pages_to_ocr}
+          fallback_pdfimages_ocr(file_path, base_url, model)
         else
           texts =
             Enum.map(pages, fn page_path ->
@@ -195,8 +209,18 @@ defmodule Seath.OCR.Ollama do
             {:error, "pdftoppm not found. Install poppler-utils for scanned PDF support."}
 
           true ->
-            {:error, {:pdf_conversion_failed, error}}
+            case fallback_pdfimages_ocr(file_path, base_url, model) do
+              {:ok, text} when text != "" -> {:ok, text}
+              _ -> {:error, {:pdf_conversion_failed, error}}
+            end
         end
+    end
+  end
+
+  defp fallback_pdfimages_ocr(file_path, base_url, model) do
+    case extract_embedded_images(file_path, base_url, model, 1_024) do
+      {:ok, text} when text != "" -> {:ok, text}
+      _ -> {:error, :no_pages_to_ocr}
     end
   end
 
